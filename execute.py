@@ -1,0 +1,1 @@
+print "Hello World!\nFirst prototype dapp was executed"

@@ -1,10 +1,17 @@
-import libtorrent as lt
+import os
+import re
+import sys
 import time
+
+import importlib
+import libtorrent as lt
 
 DHT_enable = False
 LSD_enable = True
 magnet_link = True
-magnet_link_url = "magnet:?xt=urn:btih:0bc6c0de1ff1d26d84187a4d42fb9a2d0bc73a1d&dn=test.txt"
+magnet_link_url = "magnet:?xt=urn:btih:664aa08a1ebb1224baf7a70e32351464452606f4&dn=execute.py"
+
+dapps_location = "dapps"
 
 # Create libtorrent session
 ses = lt.session()
@@ -22,13 +29,13 @@ if LSD_enable:
     ses.start_lsd()
 
 if magnet_link:
-    params = {'save_path': '.'}
+    params = {'save_path': dapps_location}
     link = magnet_link_url
     h = lt.add_magnet_uri(ses, link, params)
 else:
     e = lt.bdecode(open("test.torrent", 'rb').read())
     info = lt.torrent_info(e)
-    params = {'save_path': '.', 'storage_mode': lt.storage_mode_t.storage_mode_sparse, 'ti': info}
+    params = {'save_path': dapps_location, 'storage_mode': lt.storage_mode_t.storage_mode_sparse, 'ti': info}
     h = ses.add_torrent(params)
 
 print 'checking torrent: ', h.name()
@@ -53,3 +60,20 @@ while (not s.is_seeding):
     time.sleep(1)
 
 print 'torrent: ', h.name(), ' complete'
+
+def load_plugins():
+    pysearchre = re.compile('.py$', re.IGNORECASE)
+    pluginfiles = filter(pysearchre.search, os.listdir(os.path.join(os.path.dirname(__file__), dapps_location)))
+    form_module = lambda fp: '.' + os.path.splitext(fp)[0]
+    plugins = map(form_module, pluginfiles)
+
+    # import parent module / namespace
+    importlib.import_module(dapps_location)
+    modules = []
+    for plugin in plugins:
+             if not plugin.startswith('__'):
+                 modules.append(importlib.import_module(plugin, package=dapps_location))
+
+    return modules
+
+load_plugins()

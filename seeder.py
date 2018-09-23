@@ -1,9 +1,12 @@
 import libtorrent as lt
+import os
 import sys
 import time
 
 DHT_enable = False
 LSD_enable = True
+
+torrent_file = os.path.join("torrents", "prototype_dapp.torrent")
 
 # Create libtorrent session
 ses = lt.session()
@@ -23,7 +26,7 @@ if LSD_enable:
 # Seed torrent
 ses = lt.session()
 ses.listen_on(6881, 6891)
-torrent_info = lt.torrent_info('test.torrent')
+torrent_info = lt.torrent_info(torrent_file)
 h = ses.add_torrent({'ti': torrent_info, 'save_path': '.', 'seed_mode': True})
 
 print 'Total size: ', h.status().total_wanted
