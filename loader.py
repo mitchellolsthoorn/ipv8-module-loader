@@ -1,10 +1,10 @@
 import libtorrent as lt
 import time
 
-DHT_enable = True
+DHT_enable = False
 LSD_enable = True
 magnet_link = True
-magnet_link_url = "magnet:?xt=urn:btih:6ed6a70e75b7f02e73d26c6ba4ec0949b1950607&dn=ubuntu-18.04.1-server-arm64.iso&tr=http%3A%2F%2Ftorrent.ubuntu.com%3A6969%2Fannounce"
+magnet_link_url = "magnet:?xt=urn:btih:0bc6c0de1ff1d26d84187a4d42fb9a2d0bc73a1d&dn=test.txt"
 
 # Create libtorrent session
 ses = lt.session()
