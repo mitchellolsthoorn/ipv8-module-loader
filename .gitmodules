@@ -1,4 +1,4 @@
 [submodule "py-ipv8"]
-	path = py-ipv8
+	path = loader/pyipv8
 	url = git@github.com:Tribler/py-ipv8.git
 	branch = master
