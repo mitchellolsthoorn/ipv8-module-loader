@@ -1,33 +1,37 @@
-import libtorrent as lt
 import os
 import sys
 import time
 
-DHT_enable = False
-LSD_enable = True
+import libtorrent as lt
 
-torrent_file = os.path.join("torrents", "prototype_dapp.torrent")
+from constants import PAYLOADS_DIR, TORRENTS_DIR
+
+DHT_ENABLE = False
+LSD_ENABLE = True
+
+torrent_file_name = sys.argv[1]
+torrent_file_path = os.path.join(TORRENTS_DIR, torrent_file_name)
 
 # Create libtorrent session
 ses = lt.session()
 ses.listen_on(6881, 6891)
 
-if DHT_enable:
+if DHT_ENABLE:
     # Enable and bootstrap DHT
     ses.add_dht_router("router.utorrent.com", 6881)
     ses.add_dht_router("router.bittorrent.com", 6881)
     ses.add_dht_router("dht.transmissionbt.com", 6881)
     ses.start_dht()
 
-if LSD_enable:
+if LSD_ENABLE:
     # Enable LSD
     ses.start_lsd()
 
 # Seed torrent
 ses = lt.session()
 ses.listen_on(6881, 6891)
-torrent_info = lt.torrent_info(torrent_file)
-h = ses.add_torrent({'ti': torrent_info, 'save_path': '.', 'seed_mode': True})
+torrent_info = lt.torrent_info(torrent_file_path)
+h = ses.add_torrent({'ti': torrent_info, 'save_path': PAYLOADS_DIR, 'seed_mode': True})
 
 print 'Total size: ', h.status().total_wanted
 print 'Name: ', h.name()
