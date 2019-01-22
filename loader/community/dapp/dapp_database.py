@@ -1,10 +1,16 @@
+"""
+"""
+
 from __future__ import absolute_import
 
+# Default library imports
 import os
 
-from pyipv8.ipv8.database import Database, database_blob
-# from pyipv8.ipv8.util import is_unicode
+# Third party imports
+from ipv8.database import Database, database_blob
+# from ipv8.util import is_unicode
 
+# Constants
 DATABASE_DIRECTORY = os.path.join(u"sqlite")
 
 

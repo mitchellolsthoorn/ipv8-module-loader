@@ -1,8 +1,16 @@
-from pyipv8.ipv8.attestation.trustchain.block import TrustChainBlock
+"""
+"""
+
+from __future__ import absolute_import
+
+# Default library imports
+import logging
+
+# Third party imports
+from ipv8.attestation.trustchain.block import TrustChainBlock
 
 
 class DAppBlock(TrustChainBlock):
-
     @staticmethod
     def has_fields(needles, haystack):
         for needle in needles:

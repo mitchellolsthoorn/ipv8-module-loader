@@ -1,11 +1,21 @@
+"""
+"""
+
+from __future__ import absolute_import
+
+# Default library imports
 import logging
 
+# Third party imports
+from ipv8.attestation.trustchain.listener import BlockListener
+from ipv8.community import Community
+from ipv8.peer import Peer
+
+# Project imports
 from loader.community.dapp.block import DAppBlock
 from loader.community.dapp.dapp_database import DAppDatabase
-from pyipv8.ipv8.attestation.trustchain.listener import BlockListener
-from pyipv8.ipv8.community import Community
-from pyipv8.ipv8.peer import Peer
 
+# Constants
 DAPPS_DIR = "dapps"
 EXECUTE_FILE = "execute.py"
 TORRENTS_DIR = "torrents"

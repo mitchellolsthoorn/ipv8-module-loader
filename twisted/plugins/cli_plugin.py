@@ -25,17 +25,13 @@ from twisted.python.log import msg
 from zope.interface import implements
 
 # Third party imports - IPv8
-from pyipv8.ipv8.attestation.trustchain.community import TrustChainTestnetCommunity
-from pyipv8.ipv8.configuration import get_default_configuration
-from pyipv8.ipv8.peerdiscovery.discovery import EdgeWalk, RandomWalk
-from pyipv8.ipv8_service import IPv8
+from ipv8.attestation.trustchain.community import TrustChainTestnetCommunity
+from ipv8.configuration import get_default_configuration
+from ipv8.peerdiscovery.discovery import EdgeWalk, RandomWalk
+from ipv8_service import IPv8
 
 # Project imports
 from loader.community.dapp.community import DAppCommunity
-
-
-# Not used anymore. Use export PYTHONPATH="${PYTHONPATH}:."
-# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 
 class CLI(LineReceiver):
