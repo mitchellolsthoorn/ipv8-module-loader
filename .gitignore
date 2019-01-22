@@ -102,3 +102,11 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Twisted
+.cache
+.pid
+
+# Sqlite
+db-shm
+db-wal

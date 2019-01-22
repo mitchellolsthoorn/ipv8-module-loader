@@ -2,18 +2,18 @@
 
 ## Setup
 ```
-pip install -r loader/pyipv8/requirements.txt
+pip install -r pyipv8/requirements.txt
 pip install -r requirements.txt
 export PYTHONPATH="${PYTHONPATH}:."
 ```
 
 ## Run single instance
 ```
-twistd -n dapp -s state
+twistd -n dapp -s <state directory location>
 ```
 
 ## Run multiple instances on a single computer
 ```
-twistd --pidfile 1/twistd.pid -n dapp -s 1
-twistd --pidfile 2/twistd.pid -n dapp -s 2
+twistd --pidfile <state directory location 1>/twistd.pid -n dapp -s <state directory location 1>
+twistd --pidfile <state directory location 2>/twistd.pid -n dapp -s <state directory location 2>
 ```
