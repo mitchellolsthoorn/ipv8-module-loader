@@ -1,7 +1,15 @@
-from block import DAppBlock
+import logging
+
+from loader.community.dapp.block import DAppBlock
+from loader.community.dapp.dapp_database import DAppDatabase
 from pyipv8.ipv8.attestation.trustchain.listener import BlockListener
-from pyipv8.ipv8.deprecated.community import Community
+from pyipv8.ipv8.community import Community
 from pyipv8.ipv8.peer import Peer
+
+DAPPS_DIR = "dapps"
+EXECUTE_FILE = "execute.py"
+TORRENTS_DIR = "torrents"
+PAYLOADS_DIR = "payloads"
 
 
 class DAppCommunity(Community, BlockListener):
@@ -20,7 +28,22 @@ class DAppCommunity(Community, BlockListener):
     def __init__(self, my_peer, endpoint, network, **kwargs):
         super(DAppCommunity, self).__init__(my_peer, endpoint, network)
         self.trustchain = kwargs.pop('trustchain')
+        self.working_directory = kwargs.pop('working_directory', '')
+
+        # Logging
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+        # Block listeners
         self.trustchain.add_listener(self, ['vote'])
+
+        # Database
+        self.persistence = DAppDatabase(self.working_directory, 'dapp')
+
+        self.transport = None
+        self.discovery_strategy = None
+        self.download_strategy = None
+        self.seed_strategy = None
+        self.execution_engine = None
 
     def should_sign(self, block):
         if block.type == "vote":
@@ -30,31 +53,36 @@ class DAppCommunity(Community, BlockListener):
 
     def received_block(self, block):
         if block.type == "vote":
+            self.persistence.add_dapp(block)
             self.process_vote_block(block)
 
     def process_vote_block(self, block):
         if not block.is_valid_vote_block:
-            print "Invalid vote block received!"
+            print("Invalid vote block received!")
             return
 
         tx_dict = block.transaction
         info_hash = tx_dict['info_hash']
         name = tx_dict['name']
-        print "Vote received for dapp with info_hash {0} and name {1}!".format(info_hash, name)
-        if info_hash in self.voted_dapps:
-            pass
-        else:
-            self.sign_dapp(info_hash, name)
 
+        print("Vote received for dapp with info_hash {0} and name {1}!".format(info_hash, name))
+
+        if info_hash not in self.voted_dapps:
+            self.sign_dapp(info_hash, name)
 
     def sign_dapp(self, info_hash, name):
         tx_dict = {
             "info_hash": info_hash,
             "name": name
         }
-        print "Voted for dapp with info_hash {0} and name {1}!".format(info_hash, name)
+
         self.voted_dapps.append(info_hash)
-        return self.trustchain.self_sign_block(block_type='vote', transaction=tx_dict)
+        self.trustchain.self_sign_block(block_type='vote', transaction=tx_dict)
+
+        print("Voted for dapp with info_hash {0} and name {1}!".format(info_hash, name))
 
     def create_dapp(self):
         self.sign_dapp("9626a56c551c916f5cea40c786b5dc02faf65917", "execute")
+
+    def get_dapps(self):
+        return self.persistence.get_dapps()
