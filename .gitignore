@@ -104,8 +104,8 @@ venv.bak/
 .mypy_cache/
 
 # Twisted
-.cache
-.pid
+*.cache
+*.pid
 
 # Sqlite
 db-shm
