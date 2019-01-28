@@ -31,6 +31,7 @@ from ipv8.peerdiscovery.discovery import EdgeWalk, RandomWalk
 from ipv8_service import IPv8
 
 # Project imports
+from loader import util
 from loader.community.dapp.community import DAppCommunity
 
 
@@ -51,16 +52,30 @@ class CLI(LineReceiver):
         'green': '\033[92m',
     }
 
+    MENU_MAIN = 0
+    MENU_DAPP_LIST = 1
+    MENU_DAPP = 2
+
     def __init__(self, service, ipv8, dapp_community):
         self.service = service
         self.ipv8 = ipv8
         self.dapp_community = dapp_community
 
-        self.menu_items = [
-            {"Show dApps": self.show_dapps},
+        self.menu_level = self.MENU_MAIN
+        self.current_option = None
+        self.context = {}
+
+        self.main_menu_items = [
             {"Create dApp": self.create_dapp},
+            {"Show dApps": self.show_dapps},
             {"Exit": self.exit},
         ]
+
+        self.dapp_menu_items = [
+            {"Vote dApp": self.vote_dapp},
+        ]
+
+        self.print_main_menu()
 
     def _colorize(self, string, color):
         if color not in self.colors:
@@ -72,37 +87,129 @@ class CLI(LineReceiver):
         raise NotImplementedError
 
     def lineReceived(self, line):
-        try:
-            if len(self.menu_items) - 1 < int(line) < 0:
-                raise ValueError
+        if self.current_option is None:
+            if self.menu_level == self.MENU_MAIN:
+                try:
+                    if len(self.main_menu_items) - 1 < int(line) < 0:
+                        raise ValueError
 
-            # Call the matching function
-            self.menu_items[int(line)].values()[0]()
+                    # Call the matching function
+                    self.main_menu_items[int(line)].values()[0](line)
+                except (ValueError, IndexError):
+                    self.print_main_menu()
+            elif self.menu_level == self.MENU_DAPP_LIST:
+                try:
+                    dapps = self.dapp_community.get_dapps_from_catalog()
+                    if len(dapps) - 1 < int(line) < -1:
+                        raise ValueError
 
-            # Display wait message
-            msg(self._colorize("Press [Enter] to continue...", 'green'))
-        except (ValueError, IndexError):
-            self.print_menu()
+                    if int(line) == -1:
+                        self.menu_level = self.MENU_MAIN
+                        self.current_option = None
+                        self.context = {}
+                        self.print_main_menu()
+                        return
 
-    def print_menu(self):
+                    self.show_dapp(int(line))
+                except (ValueError, IndexError):
+                    self.print_dapp_list_menu()
+            elif self.menu_level == self.MENU_DAPP:
+                try:
+                    if len(self.dapp_menu_items) - 1 < int(line) < -1:
+                        raise ValueError
+
+                    if int(line) == -1:
+                        self.menu_level = self.MENU_DAPP_LIST
+                        self.current_option = None
+                        self.context = {}
+                        self.print_dapp_list_menu()
+                        return
+
+                    # Call the matching function
+                    self.dapp_menu_items[int(line)].values()[0](line)
+                except (ValueError, IndexError):
+                    self.print_dapp_menu()
+            else:
+                self.reset()
+        else:
+            self.current_option(line)
+
+    def print_main_menu(self):
         os.system('clear')
         msg(self._colorize('\n' + self.header, 'pink'))
         msg(self._colorize('version 0.1', 'green'))
-        for item in self.menu_items:
-            msg(self._colorize("[" + str(self.menu_items.index(item)) + "] ", 'blue') + item.keys()[0])
+        for item in self.main_menu_items:
+            msg(self._colorize("[" + str(self.main_menu_items.index(item)) + "] ", 'blue') + item.keys()[0])
 
-    def create_dapp(self):
-        self.dapp_community.create_dapp()
+    def print_dapp_list_menu(self):
+        os.system('clear')
+        msg(self._colorize('\n' + self.header, 'pink'))
+        msg(self._colorize('version 0.1', 'green'))
 
-    def show_dapps(self):
-        dapps = self.dapp_community.get_dapps()
+        dapps = self.dapp_community.get_dapps_from_catalog()
 
-        # print(str(dapps))
+        msg(self._colorize(str(len(dapps)) + " dApps found:", 'blue'))
+
+        msg(self._colorize("[-1] ", 'blue') + self._colorize("Return to previous menu", 'green'))
 
         for dapp in dapps:
-            msg(self._colorize("info_hash: " + dapp['info_hash'] + " name: " + dapp['name'], 'green'))
+            msg(
+                self._colorize("[" + str(dapps.index(dapp)) + "] ", 'blue') +
+                self._colorize(
+                    "info_hash: " + dapp['info_hash'] + " " +
+                    "name: " + dapp['name'] + " " +
+                    "votes: " + dapp['votes']
+                    , 'green'))
 
-    def exit(self):
+    def print_dapp_menu(self):
+        os.system('clear')
+        msg(self._colorize('\n' + self.header, 'pink'))
+        msg(self._colorize('version 0.1', 'green'))
+
+        dapp = self.dapp_community.get_dapp_from_catalog(self.context['info_hash'])
+
+        msg(self._colorize("Info Hash: " + str(dapp['info_hash']), 'green'))
+        msg(self._colorize("Name: " + str(dapp['name']), 'green'))
+        msg(self._colorize("Votes: " + str(dapp['votes']), 'green'))
+
+        msg(self._colorize("[-1] ", 'blue') + self._colorize("Return to previous menu", 'green'))
+
+        for item in self.dapp_menu_items:
+            msg(self._colorize("[" + str(self.dapp_menu_items.index(item)) + "] ", 'blue') + item.keys()[0])
+
+    def reset(self):
+        self.menu_level = self.MENU_MAIN
+        self.current_option = self.OPTION_NONE
+        self.context = {}
+        self.print_main_menu()
+
+    def create_dapp(self, line):
+        self.dapp_community.create_dapp()
+
+        # Display wait message
+        msg(self._colorize("Press [Enter] to continue...", 'green'))
+
+    def show_dapps(self, line):
+        self.menu_level = self.MENU_DAPP_LIST
+        self.print_dapp_list_menu()
+
+    def show_dapp(self, line):
+        dapps = self.dapp_community.get_dapps_from_catalog()
+        index = int(line)
+
+        msg("Number of dapps retrieved: " + str(len(dapps)))
+
+        self.menu_level = self.MENU_DAPP
+        self.context = dapps[int(line)]
+        self.print_dapp_menu()
+
+    def vote_dapp(self, line):
+        self.dapp_community.vote_dapp(self.context['info_hash'])
+
+        # Display wait message
+        msg(self._colorize("Press [Enter] to continue...", 'green'))
+
+    def exit(self, line):
         self.service.stop()
 
 
@@ -141,10 +248,10 @@ class CLIServiceMaker(object):
 
         # Setup logging
         root = logging.getLogger()
-        root.setLevel(logging.INFO)
+        root.setLevel(logging.DEBUG)
 
         stderr_handler = logging.StreamHandler(sys.stderr)
-        stderr_handler.setLevel(logging.INFO)
+        stderr_handler.setLevel(logging.DEBUG)
         stderr_handler.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s:%(message)s"))
         root.addHandler(stderr_handler)
 
@@ -155,11 +262,14 @@ class CLIServiceMaker(object):
 
         msg("Service: Starting")
 
+        # State directory
+        state_directory = options['statedir']
+        util.create_directory_if_not_exists(state_directory)
+
         # Initial configuration
         configuration = get_default_configuration()
         configuration['address'] = "0.0.0.0"
         configuration['port'] = 8090
-        state_directory = options['statedir']
         configuration['keys'] = [{
             'alias': 'my peer',
             'generation': u"curve25519",
@@ -193,6 +303,7 @@ class CLIServiceMaker(object):
                 ('resolve_dns_bootstrap_addresses',)
             ]
         }]
+        configuration['overlays'] = []
 
         # IPv8 instance
         self.ipv8 = IPv8(configuration)
@@ -214,7 +325,6 @@ class CLIServiceMaker(object):
 
         # CLI
         self.cli = CLI(self, self.ipv8, self.dapp_community)
-        self.cli.print_menu()
 
         def signal_handler(sig, _):
             msg("Service: Received shut down signal %s" % sig)

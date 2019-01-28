@@ -8,6 +8,7 @@ import os
 
 # Third party imports
 from ipv8.database import Database, database_blob
+
 # from ipv8.util import is_unicode
 
 # Constants
@@ -30,13 +31,14 @@ class DAppDatabase(Database):
         :param db_name: The name of the database
         """
         if working_directory != u":memory:":
-            db_path = os.path.join(working_directory, os.path.join(DATABASE_DIRECTORY, u"%s.db" % db_name))
+            db_path = os.path.join(working_directory,
+                                   os.path.join(DATABASE_DIRECTORY, u"{name}.db".format(name=db_name)))
         else:
             db_path = working_directory
 
         super(DAppDatabase, self).__init__(db_path)
 
-        self._logger.debug("DApp database path: %s", db_path)
+        self._logger.info("dApp database path: %s", db_path)
         self.db_name = db_name
         self.open()
 
@@ -46,16 +48,17 @@ class DAppDatabase(Database):
         """
         return u"""
         CREATE TABLE IF NOT EXISTS dapp_catalog (
-            info_hash          TEXT NOT NULL,
-            name               TEXT NOT NULL,
+            info_hash   TEXT NOT NULL,
+            name        TEXT NOT NULL,
+            votes       INTEGER NOT NULL,
 
             PRIMARY KEY (info_hash)
         );
 
         CREATE TABLE IF NOT EXISTS option(key TEXT PRIMARY KEY, value BLOB);
         DELETE FROM option WHERE key = 'database_version';
-        INSERT INTO option(key, value) VALUES('database_version', '%s');
-        """ % str(self.LATEST_DB_VERSION)
+        INSERT INTO option(key, value) VALUES('database_version', '{version}');
+        """.format(version=self.LATEST_DB_VERSION)
 
     def get_upgrade_script(self, current_version):
         """
@@ -64,28 +67,53 @@ class DAppDatabase(Database):
         """
         return None
 
-    def add_dapp(self, block):
-        tx = block.transaction
-        sql = "INSERT INTO dapp_catalog (info_hash, name) VALUES(?, ?)"
-        self.execute(sql, (database_blob(tx['info_hash']), database_blob(tx['name'])))
+    def add_dapp_to_catalog(self, dapp):
+        self._logger.info("persistence: Adding dApp to catalog")
+
+        sql = "INSERT INTO dapp_catalog (info_hash, name, votes) VALUES(?, ?, ?)"
+        self.execute(sql, (database_blob(dapp['info_hash']), database_blob(dapp['name']), dapp['votes'],))
         self.commit()
 
-    def get_dapp(self, info_hash):
-        dapp = list(self.execute("SELECT info_hash, name FROM dapp_catalog WHERE info_hash = ?", (database_blob(info_hash))))
-        if not dapp:
-            return []
-        return dapp
+    def get_dapp_from_catalog(self, info_hash):
+        self._logger.info("persistence: Getting dApp to catalog")
 
-    def get_dapps(self):
+        if not self.has_dapp_in_catalog(info_hash):
+            return None
+
+        dapps = list(self.execute("SELECT * FROM dapp_catalog WHERE info_hash = ?", (database_blob(info_hash),)))
+
+        dapp = dapps[0]
+
+        return {
+            'info_hash': str(dapp[0]),
+            'name': str(dapp[1]),
+            'votes': dapp[2],
+        }
+
+    def get_dapps_from_catalog(self):
+        self._logger.info("persistence: Getting dApps from catalog")
+
         dapps = list(self.execute("SELECT * FROM dapp_catalog;"))
 
         dapps_list = []
         for dapp in dapps:
             dapps_list.append({
-                'info_hash': dapp[0],
-                'name': dapp[1],
+                'info_hash': str(dapp[0]),
+                'name': str(dapp[1]),
+                'votes': str(dapp[2]),
             })
         return dapps_list
+
+    def has_dapp_in_catalog(self, info_hash):
+        self._logger.info("persistence: Check for dApp in catalog")
+
+        count = len(
+            list(self.execute("SELECT info_hash FROM dapp_catalog WHERE info_hash = ?", (database_blob(info_hash),))))
+
+        if count > 0:
+            return True
+
+        return False
 
     def open(self, initial_statements=True, prepare_visioning=True):
         return super(DAppDatabase, self).open(initial_statements, prepare_visioning)

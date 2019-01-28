@@ -9,8 +9,15 @@ import logging
 # Third party imports
 from ipv8.attestation.trustchain.block import TrustChainBlock
 
+# Constants
+DAPP_BLOCK_TYPE_VOTE = 'dapp_vote'
+DAPP_BLOCK_TYPE_VOTE_KEY_INFO_HASH = 'info_hash'
+DAPP_BLOCK_TYPE_VOTE_KEY_NAME = 'name'
+DAPP_BLOCK_TYPE_VOTE_KEY_VOTES = 'votes'
+
 
 class DAppBlock(TrustChainBlock):
+    # TODO: Add create 'dapp_created' block and let random peers cross sign it
     @staticmethod
     def has_fields(needles, haystack):
         for needle in needles:
@@ -26,15 +33,15 @@ class DAppBlock(TrustChainBlock):
         return True
 
     def is_valid_vote_block(self):
-        required_fields = ['info_hash', 'name']
-        if self.type != "vote":
+        required_fields = [DAPP_BLOCK_TYPE_VOTE_KEY_INFO_HASH, DAPP_BLOCK_TYPE_VOTE_KEY_NAME, DAPP_BLOCK_TYPE_VOTE_KEY_VOTES]
+        if self.type != DAPP_BLOCK_TYPE_VOTE:
             return False
         if not DAppBlock.has_fields(required_fields, self.transaction):
             return False
         if len(self.transaction) != len(required_fields):
             return False
 
-        required_types = [('info_hash', str), ('name', str)]
+        required_types = [(DAPP_BLOCK_TYPE_VOTE_KEY_INFO_HASH, str), (DAPP_BLOCK_TYPE_VOTE_KEY_NAME, str), (DAPP_BLOCK_TYPE_VOTE_KEY_VOTES, int)]
 
         if not DAppBlock.has_required_types(required_types, self.transaction):
             return False
