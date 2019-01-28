@@ -2,8 +2,8 @@
 
 ## Setup
 ```
-pip install -r pyipv8/requirements.txt
 pip install -r requirements.txt
+sudo apt install python-libtorrent
 export PYTHONPATH="${PYTHONPATH}:."
 ```
 
@@ -12,8 +12,21 @@ export PYTHONPATH="${PYTHONPATH}:."
 twistd -n dapp -s <state directory location>
 ```
 
+Example:
+```
+twistd -n dapp -s data/1
+```
+
 ## Run multiple instances on a single computer
 ```
-twistd --pidfile <state directory location 1>/twistd.pid -n dapp -s <state directory location 1>
-twistd --pidfile <state directory location 2>/twistd.pid -n dapp -s <state directory location 2>
+twistd --pidfile twistd1.pid -n dapp -s <state directory location 1>
+twistd --pidfile twistd2.pid -n dapp -s <state directory location 2>
+...
+twistd --pidfile twistdX.pid -n dapp -s <state directory location X>
+```
+
+Example:
+```
+twistd --pidfile twistd1.pid -n dapp -s data/1
+twistd --pidfile twistd2.pid -n dapp -s data/2
 ```
