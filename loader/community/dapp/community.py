@@ -1,10 +1,10 @@
 from __future__ import absolute_import
 
-# Default library imports
-from binascii import unhexlify, hexlify
 import logging
 import os
 import sys
+# Default library imports
+from binascii import unhexlify, hexlify
 
 # Third party imports
 from ipv8.attestation.trustchain.block import TrustChainBlock
@@ -12,6 +12,8 @@ from ipv8.attestation.trustchain.community import TrustChainCommunity
 from ipv8.attestation.trustchain.listener import BlockListener
 from ipv8.community import Community
 from ipv8.peer import Peer
+from twisted.internet import reactor
+from twisted.internet.task import LoopingCall
 
 # Project imports
 from loader import util
@@ -79,8 +81,9 @@ class DAppCommunity(Community, BlockListener):
         self._setup_working_directory_structure()
         self._load_dapp_library_namespace()
 
-        self._check_votes_in_catalog()
-        self._crawl_vote_blocks()
+        self.dapp_verify_task = self.register_task("dapp_verify", reactor.callLater(5, self._check_votes_in_catalog))
+        self.dapp_crawl_task = self.register_task("dapp_crawl", LoopingCall(self._crawl_vote_blocks), delay=20,
+                                                  interval=3600)
 
     # Util functions
     def _setup_working_directory_structure(self):
@@ -287,6 +290,8 @@ class DAppCommunity(Community, BlockListener):
 
         :return: None
         """
+        self._logger.info("dApp-community: Crawl network peers for unknown dApps")
+
         for peer in self.get_peers():
             block = self.trustchain.persistence.get_latest(peer.public_key.key_to_bin())
             if block:
@@ -340,15 +345,22 @@ class DAppCommunity(Community, BlockListener):
         # Compare and fix vote inconsistencies
         for dapp in dapps:
             info_hash = dapp['info_hash']
-            votes = dapp['votes']
+            votes_in_catalog = dapp['votes']
 
-            if info_hash in votes and votes[info_hash] != votes:
+            if info_hash in votes and votes[info_hash] != votes_in_catalog:
                 self._logger.info("dApp-community: Vote inconsistency for dApp (%s)", info_hash)
-                self.persistence.update_dapp_in_catalog(info_hash, votes)
+                self.persistence.update_dapp_in_catalog(info_hash, votes[info_hash])
+
+            votes.pop(info_hash)
+
+        if len(votes) != 0:
+            self._logger.info("dApp-community: inconsistent vote db")
 
         # Clean up
         votes = None
         voters = None
+
+        self._logger.info("dApp-community: Checking votes in catalog is done")
 
     def unload(self):
         """
