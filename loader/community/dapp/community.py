@@ -1,12 +1,13 @@
 from __future__ import absolute_import
 
 # Default library imports
-from binascii import unhexlify
+from binascii import unhexlify, hexlify
 import logging
 import os
 import sys
 
 # Third party imports
+from ipv8.attestation.trustchain.block import TrustChainBlock
 from ipv8.attestation.trustchain.community import TrustChainCommunity
 from ipv8.attestation.trustchain.listener import BlockListener
 from ipv8.community import Community
@@ -77,6 +78,9 @@ class DAppCommunity(Community, BlockListener):
 
         self._setup_working_directory_structure()
         self._load_dapp_library_namespace()
+
+        self._check_votes_in_catalog()
+        self._crawl_vote_blocks()
 
     # Util functions
     def _setup_working_directory_structure(self):
@@ -276,6 +280,75 @@ class DAppCommunity(Community, BlockListener):
         self.trustchain.self_sign_block(block_type=DAPP_BLOCK_TYPE_VOTE, transaction=tx_dict)
 
         self._logger.debug("dApp-community: Signed dApp (%s, %s)", info_hash, name)
+
+    def _crawl_vote_blocks(self):
+        """
+        Crawl network peers for unknown dApps
+
+        :return: None
+        """
+        for peer in self.get_peers():
+            block = self.trustchain.persistence.get_latest(peer.public_key.key_to_bin())
+            if block:
+                latest_block_num = block.sequence_number
+            else:
+                latest_block_num = 0
+
+            self.trustchain.crawl_chain(peer, latest_block_num)
+
+    def _check_votes_in_catalog(self):
+        """
+        Check if the votes in the catalog match the votes in the trustchain
+
+        :return: None
+        """
+        self._logger.info("dApp-community: Checking votes in catalog")
+
+        blocks = self.trustchain.persistence.get_blocks_with_type(DAPP_BLOCK_TYPE_VOTE)  # type: [TrustChainBlock]
+
+        votes = {}
+        voters = {}
+
+        for block in blocks:
+            public_key = block.public_key
+            info_hash = block.transaction['info_hash']
+
+            # Check votes database
+            if not self.persistence.did_vote(public_key, info_hash):
+                self.persistence.add_vote(public_key, info_hash)
+
+            # Check number of votes
+            if info_hash in votes:
+                votes[info_hash] = votes[info_hash] + 1
+            else:
+                votes[info_hash] = 0
+
+            # Check double votes
+            public_key_hex = hexlify(public_key)
+            if public_key_hex not in voters:
+                voters[public_key_hex] = {}
+
+            voted_dapps = voters[public_key_hex]
+            if info_hash not in voted_dapps:
+                voted_dapps[info_hash] = 1
+                voters[public_key_hex] = voted_dapps
+            else:
+                self._logger.info("dApp-community: Double vote for dApp (%s) by peer (%s)", info_hash, public_key_hex)
+
+        dapps = self.persistence.get_dapps_from_catalog()
+
+        # Compare and fix vote inconsistencies
+        for dapp in dapps:
+            info_hash = dapp['info_hash']
+            votes = dapp['votes']
+
+            if info_hash in votes and votes[info_hash] != votes:
+                self._logger.info("dApp-community: Vote inconsistency for dApp (%s)", info_hash)
+                self.persistence.update_dapp_in_catalog(info_hash, votes)
+
+        # Clean up
+        votes = None
+        voters = None
 
     def unload(self):
         """
