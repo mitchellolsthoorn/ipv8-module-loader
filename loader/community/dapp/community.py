@@ -1,10 +1,11 @@
 from __future__ import absolute_import
 
+# Default library imports
+from binascii import unhexlify, hexlify
+import importlib
 import logging
 import os
 import sys
-# Default library imports
-from binascii import unhexlify, hexlify
 
 # Third party imports
 from ipv8.attestation.trustchain.block import TrustChainBlock
@@ -19,11 +20,12 @@ from twisted.internet.task import LoopingCall
 from loader import util
 from loader.community.dapp.block import DAppBlock, DAPP_BLOCK_TYPE_VOTE
 from loader.community.dapp.dapp_database import DAppDatabase
+from loader.community.dapp.transport.bittorrent import BittorrentTransport, DAPPS_DIR, PAYLOADS_DIR, TORRENTS_DIR, \
+    EXECUTE_FILE
 
 # Constants
 DAPP_DATABASE_NAME = "dapp"  # dApp database name
 DAPP_LIBRARY_DIR = "library"  # dApp library directory
-
 
 class DAppCommunity(Community, BlockListener):
     """
@@ -72,7 +74,7 @@ class DAppCommunity(Community, BlockListener):
         # Database
         self.persistence = DAppDatabase(self.working_directory, DAPP_DATABASE_NAME)
 
-        self.transport = None
+        self.transport = BittorrentTransport(self.working_directory)
         self.discovery_strategy = None
         self.download_strategy = None
         self.seed_strategy = None
@@ -96,24 +98,71 @@ class DAppCommunity(Community, BlockListener):
         dapp_library_directory = os.path.join(self.working_directory, DAPP_LIBRARY_DIR)
         util.create_directory_if_not_exists(dapp_library_directory)
 
+        path = os.path.join(dapp_library_directory, "__init__.py")
+        with open(path, 'a+'):
+            os.utime(path, None)
+
+        # dApps
+        dapps_directory = os.path.join(self.working_directory, DAPPS_DIR)
+        util.create_directory_if_not_exists(dapps_directory)
+
+        path = os.path.join(dapps_directory, "__init__.py")
+        with open(path, 'a+'):
+            os.utime(path, None)
+
+        # payloads
+        payloads_directory = os.path.join(self.working_directory, PAYLOADS_DIR)
+        util.create_directory_if_not_exists(payloads_directory)
+
+        path = os.path.join(payloads_directory, "__init__.py")
+        with open(path, 'a+'):
+            os.utime(path, None)
+
+        # torrents
+        torrents_directory = os.path.join(self.working_directory, TORRENTS_DIR)
+        util.create_directory_if_not_exists(torrents_directory)
+
+        path = os.path.join(torrents_directory, "__init__.py")
+        with open(path, 'a+'):
+            os.utime(path, None)
+
     def _load_dapp_library_namespace(self):
         """
         Load the namespace for the dApp library
 
         :return: None
         """
-        dapp_library_directory = os.path.join(self.working_directory, DAPP_LIBRARY_DIR)
+        dapp_library_directory = os.path.join(self.working_directory, DAPPS_DIR)
         sys.path.append(os.path.abspath(dapp_library_directory))
 
     # Interface functions
-    def create_dapp(self):
+    def create_dapp(self, name):
         """
         Create a dApp
 
         :return: None
         """
-        info_hash = "9626a56c551c916f5cea40c786b5dc02faf65917"
-        name = "execute"
+        package = self.transport.create_dapp_package(name)
+        info_hash = str(package['info_hash'])
+        name = package['name']
+
+        self._logger.info("dApp-community: creating dApp (%s, %s)", info_hash, name)
+
+        if self.persistence.has_dapp_in_catalog(info_hash):
+            self._logger.info("dApp-community: dApp (%s) already exists, not creating new one", info_hash)
+            return
+
+        self.persistence.add_dapp_to_catalog(info_hash, name)
+        self.vote_dapp(info_hash)
+
+    def create_dapp_test(self):
+        """
+        Create a dApp
+
+        :return: None
+        """
+        info_hash = "9626a56c551c916f5cea40c786b5dc02faf65916"  # Changed last digit from 7 to 6
+        name = "execute2"
 
         self._logger.info("dApp-community: creating dApp (%s, %s)", info_hash, name)
 
@@ -126,18 +175,23 @@ class DAppCommunity(Community, BlockListener):
 
     def download_dapp(self, info_hash):
         """
-        Manually download a dApp
+        download a dApp
 
         :param info_hash: dApp identifier
         :type info_hash: str
         :return: None
         """
-        self._logger.info("dApp-community: manually downloading dApp (%s)", info_hash)
+        self._logger.info("dApp-community: downloading dApp (%s)", info_hash)
 
-        # TODO: Implement
-        name = "Unknown"
+        if not self.persistence.has_dapp_in_catalog(info_hash):
+            self._logger.info("dApp-community: dApp (%s) not in catalog, not downloading", info_hash)
+            return
 
-        self.persistence.add_dapp_to_catalog(info_hash, name)
+        dapp = self.persistence.get_dapp_from_catalog(info_hash)
+
+        if dapp:
+            name = dapp['name']
+            self.transport.download_dapp(info_hash, name)
 
     def get_dapp_from_catalog(self, info_hash):
         """
@@ -169,8 +223,20 @@ class DAppCommunity(Community, BlockListener):
         """
         self._logger.info("dApp-community: running dApp (%s)", info_hash)
 
-        # TODO: Implement
-        pass
+        if not self.persistence.has_dapp_in_catalog(info_hash):
+            self._logger.info("dApp-community: dApp (%s) not in catalog, not running", info_hash)
+            return
+
+        dapp = self.persistence.get_dapp_from_catalog(info_hash)
+
+        if dapp:
+            name = dapp['name']
+            dapps_directory = os.path.join(os.path.abspath(self.working_directory), DAPPS_DIR)
+            dapp_path = os.path.join(dapps_directory, name)
+            dapp_executable = os.path.join(dapp_path, EXECUTE_FILE)
+            if os.path.isdir(dapp_path) and os.path.isfile(dapp_executable):
+                self._logger.info("dApp-community: dApp (%s) found", name)
+                importlib.import_module(name + ".execute")
 
     def vote_dapp(self, info_hash):
         """

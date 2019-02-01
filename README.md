@@ -14,7 +14,7 @@ twistd -n dapp -s <state directory location>
 
 Example:
 ```
-twistd -n dapp -s data/1
+twistd -n dapp -s data/one
 ```
 
 ## Run multiple instances on a single computer
@@ -27,6 +27,6 @@ twistd --pidfile twistdX.pid -n dapp -s <state directory location X>
 
 Example:
 ```
-twistd --pidfile twistd1.pid -n dapp -s data/1
-twistd --pidfile twistd2.pid -n dapp -s data/2
+twistd --pidfile twistd1.pid -n dapp -s data/one
+twistd --pidfile twistd2.pid -n dapp -s data/two
 ```

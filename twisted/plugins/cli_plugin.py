@@ -66,12 +66,15 @@ class CLI(LineReceiver):
         self.context = {}
 
         self.main_menu_items = [
-            {"Create dApp": self.create_dapp},
+            {"Create test dApp": self.create_test_dapp},
+            {"Create dApp": self.create_dapp_setup},
             {"Show dApps": self.show_dapps},
             {"Exit": self.exit},
         ]
 
         self.dapp_menu_items = [
+            {"Download dApp": self.download_dapp},
+            {"Run dApp": self.run_dapp},
             {"Vote dApp": self.vote_dapp},
         ]
 
@@ -183,9 +186,21 @@ class CLI(LineReceiver):
         self.context = {}
         self.print_main_menu()
 
-    def create_dapp(self, line):
-        self.dapp_community.create_dapp()
+    def create_test_dapp(self, line):
+        self.dapp_community.create_dapp_test()
 
+        # Display wait message
+        msg(self._colorize("Press [Enter] to continue...", 'green'))
+
+    def create_dapp_setup(self, line):
+        self.current_option = self.create_dapp
+        msg(self._colorize("Press enter dApp package name", 'green'))
+
+    def create_dapp(self, line):
+        msg(self._colorize("dApp name: " + line, 'blue'))
+        self.dapp_community.create_dapp(line)
+
+        self.current_option = None
         # Display wait message
         msg(self._colorize("Press [Enter] to continue...", 'green'))
 
@@ -202,6 +217,18 @@ class CLI(LineReceiver):
         self.menu_level = self.MENU_DAPP
         self.context = dapps[int(line)]
         self.print_dapp_menu()
+
+    def download_dapp(self, line):
+        self.dapp_community.download_dapp(self.context['info_hash'])
+
+        # Display wait message
+        msg(self._colorize("Press [Enter] to continue...", 'green'))
+
+    def run_dapp(self, line):
+        self.dapp_community.run_dapp(self.context['info_hash'])
+
+        # Display wait message
+        msg(self._colorize("Press [Enter] to continue...", 'green'))
 
     def vote_dapp(self, line):
         self.dapp_community.vote_dapp(self.context['info_hash'])
@@ -265,6 +292,24 @@ class CLIServiceMaker(object):
         # State directory
         state_directory = options['statedir']
         util.create_directory_if_not_exists(state_directory)
+
+        if state_directory == "data/one":
+            path = os.path.join("data", "__init__.py")
+            with open(path, 'a+'):
+                os.utime(path, None)
+
+            path = os.path.join("data", "one", "__init__.py")
+            with open(path, 'a+'):
+                os.utime(path, None)
+
+        if state_directory == "data/two":
+            path = os.path.join("data", "__init__.py")
+            with open(path, 'a+'):
+                os.utime(path, None)
+
+            path = os.path.join("data", "two", "__init__.py")
+            with open(path, 'a+'):
+                os.utime(path, None)
 
         # Initial configuration
         configuration = get_default_configuration()
