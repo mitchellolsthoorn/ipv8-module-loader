@@ -10,6 +10,8 @@ import os
 import signal
 import sys
 
+from ipv8.REST.rest_manager import RESTManager
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 # Third party imports - Twisted
@@ -272,6 +274,7 @@ class CLIServiceMaker(object):
         self.trustchain_community = None
         self.dapp_community = None
         self.cli = None
+        self.rest_api = None
 
         # Setup logging
         root = logging.getLogger()
@@ -292,24 +295,6 @@ class CLIServiceMaker(object):
         # State directory
         state_directory = options['statedir']
         util.create_directory_if_not_exists(state_directory)
-
-        if state_directory == "data/one":
-            path = os.path.join("data", "__init__.py")
-            with open(path, 'a+'):
-                os.utime(path, None)
-
-            path = os.path.join("data", "one", "__init__.py")
-            with open(path, 'a+'):
-                os.utime(path, None)
-
-        if state_directory == "data/two":
-            path = os.path.join("data", "__init__.py")
-            with open(path, 'a+'):
-                os.utime(path, None)
-
-            path = os.path.join("data", "two", "__init__.py")
-            with open(path, 'a+'):
-                os.utime(path, None)
 
         # Initial configuration
         configuration = get_default_configuration()
@@ -378,6 +363,9 @@ class CLIServiceMaker(object):
 
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
+
+        self.rest_api = RESTManager(self.ipv8)
+        reactor.callLater(5, self.rest_api.start, )
 
         StandardIO(self.cli)
 

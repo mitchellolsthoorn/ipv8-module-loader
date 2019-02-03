@@ -83,7 +83,7 @@ class DAppCommunity(Community, BlockListener):
         self._setup_working_directory_structure()
         self._load_dapp_library_namespace()
 
-        self.dapp_verify_task = self.register_task("dapp_verify", reactor.callLater(5, self._check_votes_in_catalog))
+        # self.dapp_verify_task = self.register_task("dapp_verify", reactor.callLater(5, self._check_votes_in_catalog))
         self.dapp_crawl_task = self.register_task("dapp_crawl", LoopingCall(self._crawl_vote_blocks), delay=20,
                                                   interval=3600)
 
