@@ -1,0 +1,7 @@
+{
+  "name": "overlay1",
+  "version": "1.0.0",
+  "type": "overlay",
+  "overlay_class": "TrackerServiceMaker",
+  "overlay_file": "configuration"
+}

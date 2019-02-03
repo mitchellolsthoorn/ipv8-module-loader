@@ -1,0 +1,10 @@
+{
+  "name": "service1",
+  "version": "1.0.0",
+  "type": "service",
+  "service_class": "TrackerServiceMaker",
+  "service_file": "tracker_plugin",
+  "service_options": {
+    "listen_port": 10000
+  }
+}

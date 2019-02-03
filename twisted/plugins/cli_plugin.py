@@ -268,6 +268,7 @@ class CLIServiceMaker(object):
         self._stopping = False
 
         # Init variables
+        self.service = None
         self.ipv8 = None
         self.my_peer = None
         self.discovery_community = None
@@ -285,12 +286,14 @@ class CLIServiceMaker(object):
         stderr_handler.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s:%(message)s"))
         root.addHandler(stderr_handler)
 
-    def start(self, options):
+    def start(self, options, service):
         """
         Main method to startup the cli and add a signal handler.
         """
 
         msg("Service: Starting")
+
+        self.service = service
 
         # State directory
         state_directory = options['statedir']
@@ -355,7 +358,8 @@ class CLIServiceMaker(object):
 
         # dApp community
         self.dapp_community = DAppCommunity(self.my_peer, self.ipv8.endpoint, self.ipv8.network,
-                                            trustchain=self.trustchain_community, working_directory=state_directory)
+                                            trustchain=self.trustchain_community, working_directory=state_directory,
+                                            ipv8=self.ipv8, service=self.service)
         self.ipv8.overlays.append(self.dapp_community)
         self.ipv8.strategies.append((RandomWalk(self.dapp_community), 10))
 
@@ -388,7 +392,7 @@ class CLIServiceMaker(object):
         dapp_service = MultiService()
         dapp_service.setName("dapp")
 
-        reactor.callWhenRunning(self.start, options)
+        reactor.callWhenRunning(self.start, options, dapp_service)
 
         return dapp_service
 

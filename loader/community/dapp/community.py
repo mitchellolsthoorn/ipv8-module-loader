@@ -3,6 +3,7 @@ from __future__ import absolute_import
 # Default library imports
 from binascii import unhexlify, hexlify
 import importlib
+import json
 import logging
 import os
 import sys
@@ -13,6 +14,8 @@ from ipv8.attestation.trustchain.community import TrustChainCommunity
 from ipv8.attestation.trustchain.listener import BlockListener
 from ipv8.community import Community
 from ipv8.peer import Peer
+from ipv8_service import IPv8, _COMMUNITIES, _WALKERS
+from twisted.application.service import MultiService
 from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
 
@@ -26,6 +29,7 @@ from loader.community.dapp.transport.bittorrent import BittorrentTransport, DAPP
 # Constants
 DAPP_DATABASE_NAME = "dapp"  # dApp database name
 DAPP_LIBRARY_DIR = "library"  # dApp library directory
+
 
 class DAppCommunity(Community, BlockListener):
     """
@@ -64,6 +68,8 @@ class DAppCommunity(Community, BlockListener):
 
         self.trustchain = trustchain  # type: TrustChainCommunity
         self.working_directory = kwargs.pop('working_directory', "./")  # type: str
+        self.ipv8 = kwargs.pop('ipv8')  # type: IPv8
+        self.master_service = kwargs.pop('service')  # type: MultiService
 
         # Logging
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -234,9 +240,48 @@ class DAppCommunity(Community, BlockListener):
             dapps_directory = os.path.join(os.path.abspath(self.working_directory), DAPPS_DIR)
             dapp_path = os.path.join(dapps_directory, name)
             dapp_executable = os.path.join(dapp_path, EXECUTE_FILE)
-            if os.path.isdir(dapp_path) and os.path.isfile(dapp_executable):
+
+            if os.path.isdir(dapp_path) and os.path.isfile(os.path.join(dapp_path, 'package.json')):
                 self._logger.info("dApp-community: dApp (%s) found", name)
-                importlib.import_module(name + ".execute")
+
+                with open(os.path.join(dapp_path, 'package.json')) as f:
+                    data = json.load(f)
+
+                    package_type = data['type']
+                    if package_type == "executable":
+                        self._logger.info("dApp-community: executable dApp (%s) found", name)
+                        executable_file = data['executable_file']
+                        importlib.import_module(name + "." + executable_file)
+                    elif package_type == "overlay":
+                        self._logger.info("dApp-community: dApp overlay (%s) found", name)
+
+                        overlay_file = data['overlay_file']
+                        configuration = getattr(importlib.import_module(name + "." + overlay_file), "config")
+                        extra_communities = getattr(importlib.import_module(name + "." + overlay_file), "extra_communities")
+
+                        for overlay in configuration['overlays']:
+                            overlay_class = _COMMUNITIES.get(overlay['class'], (extra_communities or {}).get(overlay['class']))
+                            my_peer = self.my_peer
+                            overlay_instance = overlay_class(my_peer, self.endpoint, self.network, **overlay['initialize'])
+                            self.ipv8.overlays.append(overlay_instance)
+                            for walker in overlay['walkers']:
+                                strategy_class = _WALKERS.get(walker['strategy'], overlay_instance.get_available_strategies().get(walker['strategy']))
+                                args = walker['init']
+                                target_peers = walker['peers']
+                                self.ipv8.strategies.append((strategy_class(overlay_instance, **args), target_peers))
+                            for config in overlay['on_start']:
+                                reactor.callWhenRunning(getattr(overlay_instance, config[0]), *config[1:])
+                            self._logger.info("dApp-community: dApp overlay (%s) added", overlay['class'])
+
+                    elif package_type == "service":
+                        self._logger.info("dApp-community: dApp service (%s) found", name)
+                        service_file = data['service_file']
+                        service_class = data['service_class']
+                        service_options = data['service_options']
+                        cls = getattr(importlib.import_module(name + "." + service_file), service_class)
+                        service = cls().makeService(service_options)
+                        self.master_service.addService(service)
+                        self._logger.info("dApp-community: dApp service (%s) added", service.name)
 
     def vote_dapp(self, info_hash):
         """
