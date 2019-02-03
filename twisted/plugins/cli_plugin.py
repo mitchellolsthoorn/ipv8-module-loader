@@ -296,10 +296,13 @@ class CLIServiceMaker(object):
         state_directory = options['statedir']
         util.create_directory_if_not_exists(state_directory)
 
+        # port
+        network_port = options['port']
+
         # Initial configuration
         configuration = get_default_configuration()
         configuration['address'] = "0.0.0.0"
-        configuration['port'] = 8090
+        configuration['port'] = network_port
         configuration['keys'] = [{
             'alias': 'my peer',
             'generation': u"curve25519",
@@ -338,6 +341,9 @@ class CLIServiceMaker(object):
         # IPv8 instance
         self.ipv8 = IPv8(configuration)
 
+        # Network port
+        actual_network_port = self.ipv8.endpoint._port
+
         # Peer
         self.my_peer = self.ipv8.keys.get('my peer')
 
@@ -365,7 +371,7 @@ class CLIServiceMaker(object):
         signal.signal(signal.SIGTERM, signal_handler)
 
         self.rest_api = RESTManager(self.ipv8)
-        reactor.callLater(5, self.rest_api.start, )
+        reactor.callLater(5, self.rest_api.start, actual_network_port + 1000)
 
         StandardIO(self.cli)
 
