@@ -21,14 +21,20 @@ from twisted.internet.task import LoopingCall
 
 # Project imports
 from loader import util
-from loader.community.dapp.block import DAppBlock, DAPP_BLOCK_TYPE_VOTE
+from loader.community.dapp.block import DAppBlock, DAPP_BLOCK_TYPE_VOTE, DAPP_BLOCK_TYPE_VOTE_KEY_CREATOR, \
+    DAPP_BLOCK_TYPE_VOTE_KEY_CONTENT_HASH, DAPP_BLOCK_TYPE_VOTE_KEY_NAME
+from loader.community.dapp.core.dapp import DApp
+from loader.community.dapp.core.dapp_identifier import DAppIdentifier
 from loader.community.dapp.dapp_database import DAppDatabase
-from loader.community.dapp.transport.bittorrent import BittorrentTransport, DAPPS_DIR, PAYLOADS_DIR, TORRENTS_DIR, \
-    EXECUTE_FILE
+from loader.community.dapp.execution.engine import ExecutionEngine
+from loader.community.dapp.transport.bittorrent import BittorrentTransport, DAPPS_DIR, EXECUTE_FILE
 
 # Constants
 DAPP_DATABASE_NAME = "dapp"  # dApp database name
+DAPP_CACHE_DIR = "cache"  # dApp cache directory
 DAPP_LIBRARY_DIR = "library"  # dApp library directory
+DAPP_PACKAGE_DIR = "package"  # dApp package directory
+DAPP_TORRENT_DIR = "torrents"  # dApp torrent directory
 
 
 class DAppCommunity(Community, BlockListener):
@@ -80,16 +86,16 @@ class DAppCommunity(Community, BlockListener):
         # Database
         self.persistence = DAppDatabase(self.working_directory, DAPP_DATABASE_NAME)
 
+        # Sub components
         self.transport = BittorrentTransport(self.working_directory)
-        self.discovery_strategy = None
-        self.download_strategy = None
-        self.seed_strategy = None
-        self.execution_engine = None
+        self.execution_engine = ExecutionEngine(self.working_directory, self)
+
+        self.transport.start()
 
         self._setup_working_directory_structure()
         self._load_dapp_library_namespace()
 
-        # self.dapp_verify_task = self.register_task("dapp_verify", reactor.callLater(5, self._check_votes_in_catalog))
+        self.dapp_verify_task = self.register_task("dapp_verify", reactor.callLater(5, self._check_votes_in_catalog))
         self.dapp_crawl_task = self.register_task("dapp_crawl", LoopingCall(self._crawl_vote_blocks), delay=20,
                                                   interval=3600)
 
@@ -100,37 +106,20 @@ class DAppCommunity(Community, BlockListener):
 
         :return: None
         """
+        # dApp cache
+        dapp_cache_directory = os.path.join(self.working_directory, DAPP_CACHE_DIR)
+        util.create_directory_if_not_exists(dapp_cache_directory)
+
         # dApp library
-        dapp_library_directory = os.path.join(self.working_directory, DAPP_LIBRARY_DIR)
-        util.create_directory_if_not_exists(dapp_library_directory)
+        util.create_python_package_if_not_exists(self.working_directory, DAPP_LIBRARY_DIR)
 
-        path = os.path.join(dapp_library_directory, "__init__.py")
-        with open(path, 'a+'):
-            os.utime(path, None)
-
-        # dApps
-        dapps_directory = os.path.join(self.working_directory, DAPPS_DIR)
-        util.create_directory_if_not_exists(dapps_directory)
-
-        path = os.path.join(dapps_directory, "__init__.py")
-        with open(path, 'a+'):
-            os.utime(path, None)
-
-        # payloads
-        payloads_directory = os.path.join(self.working_directory, PAYLOADS_DIR)
-        util.create_directory_if_not_exists(payloads_directory)
-
-        path = os.path.join(payloads_directory, "__init__.py")
-        with open(path, 'a+'):
-            os.utime(path, None)
+        # dApp package
+        dapp_package_directory = os.path.join(self.working_directory, DAPP_PACKAGE_DIR)
+        util.create_directory_if_not_exists(dapp_package_directory)
 
         # torrents
-        torrents_directory = os.path.join(self.working_directory, TORRENTS_DIR)
-        util.create_directory_if_not_exists(torrents_directory)
-
-        path = os.path.join(torrents_directory, "__init__.py")
-        with open(path, 'a+'):
-            os.utime(path, None)
+        dapp_torrent_directory = os.path.join(self.working_directory, DAPP_TORRENT_DIR)
+        util.create_directory_if_not_exists(dapp_torrent_directory)
 
     def _load_dapp_library_namespace(self):
         """
@@ -138,7 +127,7 @@ class DAppCommunity(Community, BlockListener):
 
         :return: None
         """
-        dapp_library_directory = os.path.join(self.working_directory, DAPPS_DIR)
+        dapp_library_directory = os.path.join(self.working_directory, DAPP_LIBRARY_DIR)
         sys.path.append(os.path.abspath(dapp_library_directory))
 
     # Interface functions
@@ -148,67 +137,84 @@ class DAppCommunity(Community, BlockListener):
 
         :return: None
         """
-        package = self.transport.create_dapp_package(name)
-        info_hash = str(package['info_hash'])
-        name = package['name']
+        dapp_package_directory = os.path.join(self.working_directory, DAPP_PACKAGE_DIR, name)
 
-        self._logger.info("dApp-community: creating dApp (%s, %s)", info_hash, name)
-
-        if self.persistence.has_dapp_in_catalog(info_hash):
-            self._logger.info("dApp-community: dApp (%s) already exists, not creating new one", info_hash)
+        if not os.path.isdir(dapp_package_directory):
+            self._logger.info("dApp-community: dApp package (%s) does not exists", name)
             return
 
-        self.persistence.add_dapp_to_catalog(info_hash, name)
-        self.vote_dapp(info_hash)
+        package = self.transport.create_dapp_package(name)
+        info_hash = str(package['info_hash'])
+        name = str(package['name'])
+
+        identifier = DAppIdentifier(self.my_peer.public_key.key_to_bin(), info_hash)
+        dapp = DApp(identifier, name)
+
+        self._logger.info("dApp-community: creating dApp (%s, %s)", dapp.id, dapp.name)
+
+        if self.persistence.has_dapp_in_catalog(dapp.id):
+            self._logger.info("dApp-community: dApp (%s) already exists, not creating new one", dapp.id)
+            return
+
+        self.persistence.add_dapp_to_catalog(dapp)
+        self.vote_dapp(dapp.id)
 
     def create_dapp_test(self):
         """
-        Create a dApp
+        Create a test dApp
 
         :return: None
         """
-        info_hash = "9626a56c551c916f5cea40c786b5dc02faf65916"  # Changed last digit from 7 to 6
-        name = "execute2"
+        info_hash = "0000000000000000000000000000000000000000"
+        name = "test"
 
-        self._logger.info("dApp-community: creating dApp (%s, %s)", info_hash, name)
+        identifier = DAppIdentifier(self.my_peer.public_key.key_to_bin(), info_hash)
+        dapp = DApp(identifier, name)
 
-        if self.persistence.has_dapp_in_catalog(info_hash):
-            self._logger.info("dApp-community: dApp (%s) already exists, not creating new one", info_hash)
+        self._logger.info("dApp-community: creating test dApp (%s, %s)", dapp.id, dapp.name)
+
+        if self.persistence.has_dapp_in_catalog(dapp.id):
+            self._logger.info("dApp-community: test dApp (%s) already exists, not creating new one", dapp.id)
             return
 
-        self.persistence.add_dapp_to_catalog(info_hash, name)
-        self.vote_dapp(info_hash)
+        self.persistence.add_dapp_to_catalog(dapp)
+        self.vote_dapp(dapp.id)
 
-    def download_dapp(self, info_hash):
+    def download_dapp(self, dapp_identifier):
         """
         download a dApp
 
-        :param info_hash: dApp identifier
-        :type info_hash: str
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
         :return: None
         """
-        self._logger.info("dApp-community: downloading dApp (%s)", info_hash)
-
-        if not self.persistence.has_dapp_in_catalog(info_hash):
-            self._logger.info("dApp-community: dApp (%s) not in catalog, not downloading", info_hash)
+        if self.persistence.has_dapp_in_cache(dapp_identifier):
+            self._logger.info("dApp-community: dApp (%s) already downloaded, not downloading again", dapp_identifier)
             return
 
-        dapp = self.persistence.get_dapp_from_catalog(info_hash)
+        self._logger.info("dApp-community: downloading dApp (%s)", dapp_identifier)
+
+        if not self.persistence.has_dapp_in_catalog(dapp_identifier):
+            self._logger.info("dApp-community: dApp (%s) not in catalog, not downloading", dapp_identifier)
+            return
+
+        dapp = self.persistence.get_dapp_from_catalog(dapp_identifier)
 
         if dapp:
-            name = dapp['name']
-            self.transport.download_dapp(info_hash, name)
+            self.transport.download_dapp(dapp)
+            self.persistence.add_dapp_to_cache(dapp.id)
+            self.persistence.add_dapp_to_library(dapp.id)
 
-    def get_dapp_from_catalog(self, info_hash):
+    def get_dapp_from_catalog(self, dapp_identifier):
         """
         Get dApp with the provided info_hash from the catalog
 
-        :param info_hash: dApp identifier
-        :type info_hash: str
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
         :return: The dApp requested or None if it doesn't exist
         """
-        self._logger.info("dApp-community: Getting dApp (%s) from catalog", info_hash)
-        return self.persistence.get_dapp_from_catalog(info_hash)
+        self._logger.info("dApp-community: Getting dApp (%s) from catalog", dapp_identifier)
+        return self.persistence.get_dapp_from_catalog(dapp_identifier)
 
     def get_dapps_from_catalog(self):
         """
@@ -219,97 +225,50 @@ class DAppCommunity(Community, BlockListener):
         self._logger.debug("dApp-community: Getting all dApps from catalog")
         return self.persistence.get_dapps_from_catalog()
 
-    def run_dapp(self, info_hash):
+    def run_dapp(self, dapp_identifier):
         """
         Run the dApp with the provided info_hash
 
-        :param info_hash: dApp identifier
-        :type info_hash: str
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
         :return: None
         """
-        self._logger.info("dApp-community: running dApp (%s)", info_hash)
+        self._logger.info("dApp-community: running dApp (%s)", dapp_identifier)
 
-        if not self.persistence.has_dapp_in_catalog(info_hash):
-            self._logger.info("dApp-community: dApp (%s) not in catalog, not running", info_hash)
+        if not self.persistence.has_dapp_in_library(dapp_identifier):
+            self._logger.info("dApp-community: dApp (%s) not in library, not running", dapp_identifier)
             return
 
-        dapp = self.persistence.get_dapp_from_catalog(info_hash)
+        dapp = self.persistence.get_dapp_from_catalog(dapp_identifier)
 
         if dapp:
-            name = dapp['name']
-            dapps_directory = os.path.join(os.path.abspath(self.working_directory), DAPPS_DIR)
-            dapp_path = os.path.join(dapps_directory, name)
-            dapp_executable = os.path.join(dapp_path, EXECUTE_FILE)
+            self.execution_engine.run_dapp(dapp)
 
-            if os.path.isdir(dapp_path) and os.path.isfile(os.path.join(dapp_path, 'package.json')):
-                self._logger.info("dApp-community: dApp (%s) found", name)
-
-                with open(os.path.join(dapp_path, 'package.json')) as f:
-                    data = json.load(f)
-
-                    package_type = data['type']
-                    if package_type == "executable":
-                        self._logger.info("dApp-community: executable dApp (%s) found", name)
-                        executable_file = data['executable_file']
-                        importlib.import_module(name + "." + executable_file)
-                    elif package_type == "overlay":
-                        self._logger.info("dApp-community: dApp overlay (%s) found", name)
-
-                        overlay_file = data['overlay_file']
-                        configuration = getattr(importlib.import_module(name + "." + overlay_file), "config")
-                        extra_communities = getattr(importlib.import_module(name + "." + overlay_file), "extra_communities")
-
-                        for overlay in configuration['overlays']:
-                            overlay_class = _COMMUNITIES.get(overlay['class'], (extra_communities or {}).get(overlay['class']))
-                            my_peer = self.my_peer
-                            overlay_instance = overlay_class(my_peer, self.endpoint, self.network, **overlay['initialize'])
-                            self.ipv8.overlays.append(overlay_instance)
-                            for walker in overlay['walkers']:
-                                strategy_class = _WALKERS.get(walker['strategy'], overlay_instance.get_available_strategies().get(walker['strategy']))
-                                args = walker['init']
-                                target_peers = walker['peers']
-                                self.ipv8.strategies.append((strategy_class(overlay_instance, **args), target_peers))
-                            for config in overlay['on_start']:
-                                reactor.callWhenRunning(getattr(overlay_instance, config[0]), *config[1:])
-                            self._logger.info("dApp-community: dApp overlay (%s) added", overlay['class'])
-
-                    elif package_type == "service":
-                        self._logger.info("dApp-community: dApp service (%s) found", name)
-                        service_file = data['service_file']
-                        service_class = data['service_class']
-                        service_options = data['service_options']
-                        cls = getattr(importlib.import_module(name + "." + service_file), service_class)
-                        service = cls().makeService(service_options)
-                        self.master_service.addService(service)
-                        self._logger.info("dApp-community: dApp service (%s) added", service.name)
-
-    def vote_dapp(self, info_hash):
+    def vote_dapp(self, dapp_identifier):
         """
-        Vote on dApp with provided info_hash
+        Vote on dApp with provided dApp id
 
-        :param info_hash: dApp identifier
-        :type info_hash: str
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
         :return: None
         """
-        if not self.persistence.has_dapp_in_catalog(info_hash):
-            self._logger.info("dApp-community: dApp (%s) not in catalog, not voting", info_hash)
+        if not self.persistence.has_dapp_in_catalog(dapp_identifier):
+            self._logger.info("dApp-community: dApp (%s) not in catalog, not voting", dapp_identifier)
             return
 
-        if self.persistence.did_vote(self.my_peer.public_key.key_to_bin(), info_hash):
-            self._logger.info("dApp-community: Already voted on dApp (%s), not voting", info_hash)
+        if self.persistence.did_vote(self.my_peer.public_key.key_to_bin(), dapp_identifier):
+            self._logger.info("dApp-community: Already voted on dApp (%s), not voting", dapp_identifier)
             return
 
-        dapp = self.persistence.get_dapp_from_catalog(info_hash)
+        dapp = self.persistence.get_dapp_from_catalog(dapp_identifier)
 
         if dapp:
-            name = dapp['name']
-
             # Add vote to catalog and votes
-            self.persistence.add_vote(self.my_peer.public_key.key_to_bin(), info_hash)
-            self.persistence.add_vote_to_dapp_in_catalog(info_hash)
+            self.persistence.add_vote_to_votes(self.my_peer.public_key.key_to_bin(), dapp.id)
+            self.persistence.add_vote_to_dapp_in_catalog(dapp.id)
 
-            self._logger.info("dApp-community: Vote for dApp (%s, %s)", info_hash, name)
-            self._sign_dapp(info_hash, name)
+            self._logger.info("dApp-community: Vote for dApp (%s, %s)", dapp.id, dapp.name)
+            self._sign_dapp(dapp)
 
     # Internal logic functions
     def should_sign(self, block):
@@ -360,40 +319,44 @@ class DAppCommunity(Community, BlockListener):
 
         public_key = block.public_key  # type: bytes
         tx_dict = block.transaction  # type: dict
-        info_hash = tx_dict['info_hash']  # type: str
-        name = tx_dict['name']  # type: str
+        creator = tx_dict[DAPP_BLOCK_TYPE_VOTE_KEY_CREATOR]  # type: bytes
+        content_hash = tx_dict[DAPP_BLOCK_TYPE_VOTE_KEY_CONTENT_HASH]  # type: str
+        name = tx_dict[DAPP_BLOCK_TYPE_VOTE_KEY_NAME]  # type: str
+
+        identifier = DAppIdentifier(creator, content_hash)
 
         # Add dApp to catalog if it isn't known yet
-        if not self.persistence.has_dapp_in_catalog(info_hash):
-            self._logger.info("dApp-community: Adding unknown dApp to catalog (%s, %s)", info_hash, name)
-            self.persistence.add_dapp_to_catalog(info_hash, name, 0)
+        if not self.persistence.has_dapp_in_catalog(identifier):
+            self._logger.info("dApp-community: Adding unknown dApp to catalog (%s, %s)", identifier, name)
+
+            dapp = DApp(identifier, name)
+            self.persistence.add_dapp_to_catalog(dapp)
 
         # Add vote to catalog and votes if it isn't known yet
-        if not self.persistence.did_vote(public_key, info_hash):
-            self._logger.info("dApp-community: Received vote (%s, %s)", info_hash, name)
-            self.persistence.add_vote(public_key, info_hash)
-            self.persistence.add_vote_to_dapp_in_catalog(info_hash)
+        if not self.persistence.did_vote(public_key, identifier):
+            self._logger.info("dApp-community: Received vote (%s, %s)", identifier, name)
+            self.persistence.add_vote_to_votes(public_key, identifier)
+            self.persistence.add_vote_to_dapp_in_catalog(identifier)
 
-    def _sign_dapp(self, info_hash, name):
+    def _sign_dapp(self, dapp):
         """
         Internal function for signing a dApp
 
-        :param info_hash: dApp identifier
-        :type info_hash: str
-        :param name: Name of the dApp
-        :type name: str
+        :param dapp: dApp
+        :type dapp: DApp
         :return: None
         """
-        self._logger.debug("dApp-community: Signing dApp (%s, %s)", info_hash, name)
+        self._logger.debug("dApp-community: Signing dApp (%s, %s)", dapp.id, dapp.name)
 
         tx_dict = {
-            'info_hash': info_hash,
-            'name': name,
+            DAPP_BLOCK_TYPE_VOTE_KEY_CREATOR: dapp.id.creator,
+            DAPP_BLOCK_TYPE_VOTE_KEY_CONTENT_HASH: dapp.id.content_hash,
+            DAPP_BLOCK_TYPE_VOTE_KEY_NAME: dapp.name,
         }
 
         self.trustchain.self_sign_block(block_type=DAPP_BLOCK_TYPE_VOTE, transaction=tx_dict)
 
-        self._logger.debug("dApp-community: Signed dApp (%s, %s)", info_hash, name)
+        self._logger.debug("dApp-community: Signed dApp (%s, %s)", dapp.id, dapp.name)
 
     def _crawl_vote_blocks(self):
         """
@@ -410,11 +373,11 @@ class DAppCommunity(Community, BlockListener):
             else:
                 latest_block_num = 0
 
-            self.trustchain.crawl_chain(peer, latest_block_num)
+            self.trustchain.crawl_chain(peer)
 
     def _check_votes_in_catalog(self):
         """
-        Check if the votes in the catalog match the votes in the trustchain
+        Check if the votes in the catalog match the votes in trustchain
 
         :return: None
         """
@@ -426,18 +389,23 @@ class DAppCommunity(Community, BlockListener):
         voters = {}
 
         for block in blocks:
-            public_key = block.public_key
-            info_hash = block.transaction['info_hash']
+            public_key = block.public_key  # type: bytes
+            tx_dict = block.transaction  # type: dict
+            creator = tx_dict[DAPP_BLOCK_TYPE_VOTE_KEY_CREATOR]  # type: bytes
+            content_hash = tx_dict[DAPP_BLOCK_TYPE_VOTE_KEY_CONTENT_HASH]  # type: str
+            name = tx_dict[DAPP_BLOCK_TYPE_VOTE_KEY_NAME]  # type: str
+
+            identifier = DAppIdentifier(creator, content_hash)
 
             # Check votes database
-            if not self.persistence.did_vote(public_key, info_hash):
-                self.persistence.add_vote(public_key, info_hash)
+            if not self.persistence.did_vote(public_key, identifier):
+                self.persistence.add_vote_to_votes(public_key, identifier)
 
             # Check number of votes
-            if info_hash in votes:
-                votes[info_hash] = votes[info_hash] + 1
+            if identifier in votes:
+                votes[identifier] = votes[identifier] + 1
             else:
-                votes[info_hash] = 0
+                votes[identifier] = 1
 
             # Check double votes
             public_key_hex = hexlify(public_key)
@@ -445,24 +413,24 @@ class DAppCommunity(Community, BlockListener):
                 voters[public_key_hex] = {}
 
             voted_dapps = voters[public_key_hex]
-            if info_hash not in voted_dapps:
-                voted_dapps[info_hash] = 1
+            if identifier not in voted_dapps:
+                voted_dapps[identifier] = 1
                 voters[public_key_hex] = voted_dapps
             else:
-                self._logger.info("dApp-community: Double vote for dApp (%s) by peer (%s)", info_hash, public_key_hex)
+                self._logger.info("dApp-community: Double vote for dApp (%s) by peer (%s)", identifier, public_key_hex)
 
         dapps = self.persistence.get_dapps_from_catalog()
 
         # Compare and fix vote inconsistencies
         for dapp in dapps:
-            info_hash = dapp['info_hash']
-            votes_in_catalog = dapp['votes']
+            identifier = dapp.id
+            votes_in_catalog = dapp.votes
 
-            if info_hash in votes and votes[info_hash] != votes_in_catalog:
-                self._logger.info("dApp-community: Vote inconsistency for dApp (%s)", info_hash)
-                self.persistence.update_dapp_in_catalog(info_hash, votes[info_hash])
+            if identifier in votes and votes[identifier] != votes_in_catalog:
+                self._logger.info("dApp-community: Vote inconsistency for dApp (%s)", identifier)
+                self.persistence.update_dapp_in_catalog(identifier, votes[identifier])
 
-            votes.pop(info_hash)
+            votes.pop(identifier)
 
         if len(votes) != 0:
             self._logger.info("dApp-community: inconsistent vote db")
@@ -483,3 +451,6 @@ class DAppCommunity(Community, BlockListener):
 
         # Close the persistence layer
         self.persistence.close()
+
+        # Stop transport
+        self.transport.stop()

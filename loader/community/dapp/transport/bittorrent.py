@@ -3,18 +3,22 @@ from __future__ import absolute_import
 # Default library imports
 import logging
 import os
+import shutil
 import time
 
 # Third party imports
 import libtorrent as lt
 
+# Constants
+from loader.community.dapp.core.dapp import DApp
+
 # Project imports
 
-# Constants
-DAPPS_DIR = "dapps"
+DAPPS_DIR = "cache"
 EXECUTE_FILE = "execute.py"
-PAYLOADS_DIR = "payloads"
+PAYLOADS_DIR = "package"
 TORRENTS_DIR = "torrents"
+LTSTATE_FILENAME = "lt.state"
 
 
 class BittorrentTransport(object):
@@ -48,11 +52,18 @@ class BittorrentTransport(object):
             # Enable LSD
             self.ses.start_lsd()
 
-    def download_dapp(self, info_hash, name):
+    def download_dapp(self, dapp):
+        """
+        Download dApp
+
+        :param dapp: dApp
+        :type dapp: DApp
+        :return: None
+        """
         dapps_directory = os.path.join(self.working_directory, DAPPS_DIR)
 
         params = {'save_path': dapps_directory}
-        torrent = "magnet:?xt=urn:btih:{0}&dn={1}".format(info_hash, name)
+        torrent = "magnet:?xt=urn:btih:{0}&dn={1}".format(dapp.id.content_hash, dapp.name)
         h = lt.add_magnet_uri(self.ses, torrent, params)
 
         self._logger.debug("transport: checking torrent (%s)", h.name())
@@ -60,10 +71,12 @@ class BittorrentTransport(object):
         while not h.has_metadata():
             time.sleep(.1)
 
-        self._logger.debug("transport: metadata complete for torrent (%s)", info_hash)
+        self._logger.debug("transport: metadata complete for torrent (%s)", dapp.id.content_hash)
 
         torrent_info = h.get_torrent_info()
         h = self.ses.add_torrent({'ti': torrent_info, 'save_path': dapps_directory, 'seed_mode': True})
+
+        # shutil.copytree(os.path.join(dapps_directory, dapp.name), os.path.join(self.working_directory, "library", dapp.name))
 
     def create_dapp_package(self, dapp):
         payloads_directory = os.path.join(self.working_directory, PAYLOADS_DIR)
@@ -108,3 +121,20 @@ class BittorrentTransport(object):
             'info_hash': torrent_info.info_hash(),
             'name': torrent_info.name(),
         }
+
+    def start(self):
+        try:
+            lt_state = lt.bdecode(
+                open(os.path.join(self.working_directory, LTSTATE_FILENAME)).read())
+            if lt_state is not None:
+                self.ses.load_state(lt_state)
+            else:
+                self._logger.warning("the lt.state appears to be corrupt, writing new data on shutdown")
+        except Exception as exc:
+            self._logger.info("could not load libtorrent state, got exception: %r. starting from scratch" % exc)
+
+    def stop(self):
+        # Save libtorrent state
+        ltstate_file = open(os.path.join(self.working_directory, LTSTATE_FILENAME), 'w')
+        ltstate_file.write(lt.bencode(self.ses.save_state()))
+        ltstate_file.close()

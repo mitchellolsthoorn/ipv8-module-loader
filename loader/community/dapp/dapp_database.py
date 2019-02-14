@@ -1,11 +1,15 @@
 from __future__ import absolute_import
 
+import os
 # Default library imports
 from binascii import hexlify
-import os
 
 # Third party imports
 from ipv8.database import Database, database_blob
+
+# Project imports
+from loader.community.dapp.core.dapp import DApp
+from loader.community.dapp.core.dapp_identifier import DAppIdentifier
 
 # Constants
 DATABASE_DIRECTORY = os.path.join(u"sqlite")  # Database sub-directory
@@ -45,19 +49,35 @@ class DAppDatabase(Database):
         Return the schema for the database.
         """
         return u"""
-        CREATE TABLE IF NOT EXISTS dapp_catalog (
-            info_hash   TEXT NOT NULL,
-            name        TEXT NOT NULL,
-            votes       INTEGER NOT NULL,
-
-            PRIMARY KEY (info_hash)
-        );
-        
-        CREATE TABLE IF NOT EXISTS dapp_votes (
+        CREATE TABLE IF NOT EXISTS dapp_cache (
             public_key  TEXT NOT NULL,
             info_hash   TEXT NOT NULL,
 
             PRIMARY KEY (public_key, info_hash)
+        );
+        
+        CREATE TABLE IF NOT EXISTS dapp_catalog (
+            public_key  TEXT NOT NULL,
+            info_hash   TEXT NOT NULL,
+            name        TEXT NOT NULL,
+            votes       INTEGER NOT NULL,
+
+            PRIMARY KEY (public_key, info_hash)
+        );
+        
+        CREATE TABLE IF NOT EXISTS dapp_library (
+            public_key  TEXT NOT NULL,
+            info_hash   TEXT NOT NULL,
+
+            PRIMARY KEY (public_key, info_hash)
+        );
+        
+        CREATE TABLE IF NOT EXISTS dapp_votes (
+            voter_public_key    TEXT NOT NULL,
+            public_key          TEXT NOT NULL,
+            info_hash           TEXT NOT NULL,
+
+            PRIMARY KEY (voter_public_key, public_key, info_hash)
         );
 
         CREATE TABLE IF NOT EXISTS option(key TEXT PRIMARY KEY, value BLOB);
@@ -72,60 +92,142 @@ class DAppDatabase(Database):
         """
         return None
 
+    # dApp cache
+    def add_dapp_to_cache(self, dapp_identifier):
+        """
+        Add dApp to cache
+
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
+        :return: None
+        """
+        self._logger.info("persistence: Adding dApp (%s) to cache", dapp_identifier)
+
+        sql = "INSERT INTO dapp_cache (public_key, info_hash) VALUES(?, ?)"
+        self.execute(sql, (database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),))
+        self.commit()
+
+    def get_dapp_from_cache(self, dapp_identifier):
+        """
+        Get dApp from the cache
+
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
+        :return: dApp information
+        """
+        self._logger.debug("persistence: Getting dApp (%s) from cache", dapp_identifier)
+
+        if not self.has_dapp_in_cache(dapp_identifier):
+            return None
+
+        sql = "SELECT * FROM dapp_cache WHERE public_key = ? AND info_hash = ?;"
+        res = list(
+            self.execute(sql, (database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),)))
+
+        dapp = res[0]
+
+        public_key = bytes(dapp[0])
+        content_hash = str(dapp[1])
+        identifier = DAppIdentifier(public_key, content_hash)
+
+        return identifier
+
+    def get_dapps_from_cache(self):
+        """
+        Retrieve all dApps from the cache
+
+        :return: All dApps
+        """
+        self._logger.debug("persistence: Getting all dApps from cache")
+
+        sql = "SELECT * FROM dapp_cache;"
+        res = list(self.execute(sql))
+
+        dapps = []
+        for dapp in res:
+            public_key = bytes(dapp[0])
+            content_hash = str(dapp[1])
+            identifier = DAppIdentifier(public_key, content_hash)
+
+            dapps.append(identifier)
+        return dapps
+
+    def has_dapp_in_cache(self, dapp_identifier):
+        """
+        Check if dApp exists in cache
+
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
+        :return: If the dApp has been found
+        """
+        self._logger.debug("persistence: Check for dApp (%s) in cache", dapp_identifier)
+
+        sql = "SELECT public_key, info_hash FROM dapp_cache WHERE public_key = ? AND info_hash = ?;"
+        res = list(
+            self.execute(sql, (database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),)))
+        count = len(res)
+
+        if count > 0:
+            return True
+
+        return False
+
     # dApp catalog
-    def add_dapp_to_catalog(self, info_hash, name, votes=0):
+    def add_dapp_to_catalog(self, dapp):
         """
         Add dApp to the catalog
 
-        :param info_hash: dApp identifier
-        :type info_hash: str
-        :param name: Name of the dApp
-        :type name: str
-        :param votes: Number of votes
-        :type votes: int
+        :param dapp: dApp
+        :type dapp: DApp
         :return: None
         """
+        self._logger.info("persistence: Adding dApp (%s) to catalog", dapp)
 
-        self._logger.info("persistence: Adding dApp (%s) to catalog", info_hash)
-
-        sql = "INSERT INTO dapp_catalog (info_hash, name, votes) VALUES(?, ?, ?)"
-        self.execute(sql, (database_blob(info_hash), database_blob(name), votes,))
+        sql = "INSERT INTO dapp_catalog (public_key, info_hash, name, votes) VALUES(?, ?, ?, ?)"
+        self.execute(sql, (
+            database_blob(dapp.id.creator), database_blob(dapp.id.content_hash), database_blob(dapp.name), dapp.votes,))
         self.commit()
 
-    def add_vote_to_dapp_in_catalog(self, info_hash):
+    def add_vote_to_dapp_in_catalog(self, dapp_identifier):
         """
         Increment votes for the provided dApp
 
-        :param info_hash: dApp identifier
-        :type info_hash: str
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
         :return: None
         """
-        sql = "UPDATE dapp_catalog SET votes = votes + 1 WHERE info_hash = ?;"
-        self.execute(sql, (database_blob(info_hash),))
+        self._logger.debug("persistence: Adding vote to dApp (%s) in catalog", dapp_identifier)
+
+        sql = "UPDATE dapp_catalog SET votes = votes + 1 WHERE public_key = ? AND info_hash = ?;"
+        self.execute(sql, (database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),))
         self.commit()
 
-    def get_dapp_from_catalog(self, info_hash):
+    def get_dapp_from_catalog(self, dapp_identifier):
         """
         Get dApp from the catalog
 
-        :param info_hash: dApp identifier
-        :type info_hash: str
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
         :return: dApp information
         """
-        self._logger.debug("persistence: Getting dApp (%s) from catalog", info_hash)
+        self._logger.debug("persistence: Getting dApp (%s) from catalog", dapp_identifier)
 
-        if not self.has_dapp_in_catalog(info_hash):
+        if not self.has_dapp_in_catalog(dapp_identifier):
             return None
 
-        sql = "SELECT * FROM dapp_catalog WHERE info_hash = ?;"
-        res = list(self.execute(sql, (database_blob(info_hash),)))
+        sql = "SELECT * FROM dapp_catalog WHERE public_key = ? AND info_hash = ?;"
+        res = list(
+            self.execute(sql, (database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),)))
 
         dapp = res[0]
-        return {
-            'info_hash': str(dapp[0]),
-            'name': str(dapp[1]),
-            'votes': int(dapp[2]),
-        }
+
+        public_key = bytes(dapp[0])
+        content_hash = str(dapp[1])
+        name = str(dapp[2])
+        identifier = DAppIdentifier(public_key, content_hash)
+        votes = int(dapp[3])
+
+        return DApp(identifier, name, votes)
 
     def get_dapps_from_catalog(self):
         """
@@ -140,25 +242,28 @@ class DAppDatabase(Database):
 
         dapps = []
         for dapp in res:
-            dapps.append({
-                'info_hash': str(dapp[0]),
-                'name': str(dapp[1]),
-                'votes': str(dapp[2]),
-            })
+            public_key = bytes(dapp[0])
+            content_hash = str(dapp[1])
+            name = str(dapp[2])
+            identifier = DAppIdentifier(public_key, content_hash)
+            votes = int(dapp[3])
+
+            dapps.append(DApp(identifier, name, votes))
         return dapps
 
-    def has_dapp_in_catalog(self, info_hash):
+    def has_dapp_in_catalog(self, dapp_identifier):
         """
         Check if dApp exists in catalog
 
-        :param info_hash: dApp identifier
-        :type info_hash: str
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
         :return: If the dApp has been found
         """
-        self._logger.debug("persistence: Check for dApp (%s) in catalog", info_hash)
+        self._logger.debug("persistence: Check for dApp (%s) in catalog", dapp_identifier)
 
-        sql = "SELECT info_hash FROM dapp_catalog WHERE info_hash = ?;"
-        res = list(self.execute(sql, (database_blob(info_hash),)))
+        sql = "SELECT public_key, info_hash FROM dapp_catalog WHERE public_key = ? AND info_hash = ?;"
+        res = list(
+            self.execute(sql, (database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),)))
         count = len(res)
 
         if count > 0:
@@ -166,53 +271,192 @@ class DAppDatabase(Database):
 
         return False
 
-    def update_dapp_in_catalog(self, info_hash, votes):
+    def update_dapp_in_catalog(self, dapp_identifier, votes):
         """
         Update the number of votes for a dApp in the catalog
 
-        :param info_hash: dApp identifier
-        :type info_hash: str
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
         :param votes: Number of votes
         :type votes: int
         :return: None
         """
-        self._logger.debug("persistence: Update dapp (%s)", info_hash)
+        self._logger.debug("persistence: Update dApp (%s)", dapp_identifier)
 
-        sql = "UPDATE dapp_catalog SET votes = ? WHERE info_hash = ?;"
-        self.execute(sql, (votes, database_blob(info_hash),))
+        sql = "UPDATE dapp_catalog SET votes = ? WHERE public_key = ? AND info_hash = ?;"
+        self.execute(sql, (votes, database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),))
         self.commit()
 
+    # dApp library
+    def add_dapp_to_library(self, dapp_identifier):
+        """
+        Add dApp to library
+
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
+        :return: None
+        """
+        self._logger.info("persistence: Adding dApp (%s) to library", dapp_identifier)
+
+        sql = "INSERT INTO dapp_library (public_key, info_hash) VALUES(?, ?)"
+        self.execute(sql, (database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),))
+        self.commit()
+
+    def get_dapp_from_library(self, dapp_identifier):
+        """
+        Get dApp from the library
+
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
+        :return: dApp information
+        """
+        self._logger.debug("persistence: Getting dApp (%s) from library", dapp_identifier)
+
+        if not self.has_dapp_in_library(dapp_identifier):
+            return None
+
+        sql = "SELECT * FROM dapp_library WHERE public_key = ? AND info_hash = ?;"
+        res = list(
+            self.execute(sql, (database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),)))
+
+        dapp = res[0]
+
+        public_key = bytes(dapp[0])
+        content_hash = str(dapp[1])
+        identifier = DAppIdentifier(public_key, content_hash)
+
+        return identifier
+
+    def get_dapps_from_library(self):
+        """
+        Retrieve all dApps from the library
+
+        :return: All dApps
+        """
+        self._logger.debug("persistence: Getting all dApps from library")
+
+        sql = "SELECT * FROM dapp_library;"
+        res = list(self.execute(sql))
+
+        dapps = []
+        for dapp in res:
+            public_key = bytes(dapp[0])
+            content_hash = str(dapp[1])
+            identifier = DAppIdentifier(public_key, content_hash)
+
+            dapps.append(identifier)
+        return dapps
+
+    def has_dapp_in_library(self, dapp_identifier):
+        """
+        Check if dApp exists in library
+
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
+        :return: If the dApp has been found
+        """
+        self._logger.debug("persistence: Check for dApp (%s) in library", dapp_identifier)
+
+        sql = "SELECT public_key, info_hash FROM dapp_library WHERE public_key = ? AND info_hash = ?;"
+        res = list(
+            self.execute(sql,
+                         (database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),)))
+        count = len(res)
+
+        if count > 0:
+            return True
+
+        return False
+
     # dApp votes
-    def add_vote(self, public_key, info_hash):
+    def add_vote_to_votes(self, voter_public_key, dapp_identifier):
         """
         Add vote to votes database
 
-        :param public_key: Public key of the voter
-        :type public_key: bytes
-        :param info_hash: dApp identifier
-        :type info_hash: str
+        :param voter_public_key: Public key of the voter
+        :type voter_public_key: bytes
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
         :return: None
         """
-        self._logger.debug("persistence: Add vote (%s, %s) to votes", hexlify(public_key), info_hash)
+        self._logger.debug("persistence: Add vote (%s, %s) to votes", hexlify(voter_public_key), dapp_identifier)
 
-        sql = "INSERT INTO dapp_votes (public_key, info_hash) VALUES (?, ?);"
-        self.execute(sql, (database_blob(public_key), database_blob(info_hash),))
+        sql = "INSERT INTO dapp_votes (voter_public_key, public_key, info_hash) VALUES (?, ?, ?);"
+        self.execute(sql, (database_blob(voter_public_key), database_blob(dapp_identifier.creator),
+                           database_blob(dapp_identifier.content_hash),))
         self.commit()
 
-    def did_vote(self, public_key, info_hash):
+    def get_votes_for_dapp(self, dapp_identifier):
+        """
+        Get votes for dApp
+
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
+        :return: vote information
+        """
+        self._logger.debug("persistence: Getting votes for dApp (%s)", dapp_identifier)
+
+        if not self.has_dapp_in_catalog(dapp_identifier):
+            return None
+
+        sql = "SELECT * FROM dapp_votes WHERE public_key = ? AND info_hash = ?;"
+        res = list(
+            self.execute(sql, (database_blob(dapp_identifier.creator), database_blob(dapp_identifier.content_hash),)))
+
+        votes = []
+        for vote in res:
+            voter_public_key = bytes(vote[0])
+            creator = bytes(vote[1])
+            content_hash = str(vote[2])
+            identifier = DAppIdentifier(creator, content_hash)
+
+            votes.append({
+                'voter': voter_public_key,
+                'identifier': identifier,
+            })
+        return votes
+
+    def get_votes_for_peer(self, peer):
+        """
+        Get votes for peer
+
+        :param peer: public key of peer
+        :type peer: bytes
+        :return: vote information
+        """
+        self._logger.debug("persistence: Getting votes for peer (%s)", hexlify(peer))
+
+        sql = "SELECT * FROM dapp_votes WHERE voter_public_key = ?;"
+        res = list(self.execute(sql, (database_blob(peer),)))
+
+        votes = []
+        for vote in res:
+            voter_public_key = bytes(vote[0])
+            creator = bytes(vote[1])
+            content_hash = str(vote[2])
+            identifier = DAppIdentifier(creator, content_hash)
+
+            votes.append({
+                'voter': voter_public_key,
+                'identifier': identifier,
+            })
+        return votes
+
+    def did_vote(self, voter_public_key, dapp_identifier):
         """
         Check if the node with the provided public key voted on the dApp with the provided info_hash
 
-        :param public_key: Public key of the voter
-        :type public_key: bytes
-        :param info_hash: dApp identifier
-        :type info_hash: str
+        :param voter_public_key: Public key of the voter
+        :type voter_public_key: bytes
+        :param dapp_identifier: dApp identifier
+        :type dapp_identifier: DAppIdentifier
         :return: True if voted, otherwise False
         """
-        self._logger.debug("persistence: Check for vote (%s, %s) in votes", hexlify(public_key), info_hash)
+        self._logger.debug("persistence: Check for vote (%s, %s) in votes", hexlify(voter_public_key), dapp_identifier)
 
-        sql = "SELECT * FROM dapp_votes WHERE public_key = ? AND info_hash = ?;"
-        res = list(self.execute(sql, (database_blob(public_key), database_blob(info_hash),)))
+        sql = "SELECT * FROM dapp_votes WHERE voter_public_key = ? AND public_key = ? AND info_hash = ?;"
+        res = list(self.execute(sql, (database_blob(voter_public_key), database_blob(dapp_identifier.creator),
+                                      database_blob(dapp_identifier.content_hash),)))
         count = len(res)
 
         if count > 0:

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>dApp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/css/bootstrap-combined.min.css" rel="stylesheet">
+<script src="http://ajax.aspnetcdn.com/ajax/jquery/jquery-1.9.0.js"></script>
+<script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/js/bootstrap.min.js"></script>
+<script src="http://ajax.aspnetcdn.com/ajax/knockout/knockout-2.2.1.js"></script>
+</head>
+<body>
+    <div class="navbar">
+        <div class="navbar-inner">
+            <a class="brand" href="#">dApp</a>
+        </div>
+    </div>
+    <div id="main" class="container">
+        <table class="table table-striped">
+            <tr><td style="width: 1px;"></td><td><b>dApp</b></td><td><b>Actions</b></td></tr>
+            <!-- ko foreach: Dapps -->
+            <tr>
+                <td>
+                </td>
+                <td><p><b data-bind="text: title"></b></p><p data-bind="text: description"></p></td>
+                <td>
+                    <button data-bind="click: $parent.vote" class="btn">Vote</button>
+                    <button data-bind="click: $parent.download" class="btn">Download</button>
+                </td>
+            </tr>
+            <!-- /ko -->
+        </table>
+    </div>
+    <script type="text/javascript">
+        function DappsViewModel() {
+            var self = this;
+            self.DappsURI = 'http://localhost:9090/dapp/catalog';
+            self.Dapps = ko.observableArray();
+
+            self.ajax = function(uri, method, data) {
+                var request = {
+                    url: uri,
+                    type: method,
+                    contentType: "application/json",
+                    accepts: "application/json",
+                    cache: false,
+                    dataType: 'json',
+                    data: JSON.stringify(data),
+                    error: function(jqXHR) {
+                        console.log("ajax error " + jqXHR.status);
+                    }
+                };
+                return $.ajax(request);
+            }
+            self.vote = function(Dapp, data) {
+                self.ajax(Dapp.uri(), 'PUT', data).done(function(res) {
+                    self.updateDapp(Dapp, res.Dapp);
+                });
+            }
+            self.download = function(Dapp) {
+                self.ajax(Dapp.uri(), 'PUT').done(function() {
+                    self.Dapps.remove(Dapp);
+                });
+            }
+            self.ajax(self.DappsURI, 'GET').done(function(data) {
+            for (var i = 0; i < data.Dapps.length; i++) {
+                self.Dapps.push({
+                    creator: ko.observable(data.Dapps[i].identifier.creator),
+                    content_hash: ko.observable(data.Dapps[i].identifier.content_hash),
+                    name: ko.observable(data.Dapps[i].name),
+                    votes: ko.observable(data.Dapps[i].votes),
+                });
+            }
+        });
+        }
+
+        var DappsViewModel = new DappsViewModel();
+        ko.applyBindings(DappsViewModel, $('#main')[0]);
+    </script>
+</body>
+</html>
