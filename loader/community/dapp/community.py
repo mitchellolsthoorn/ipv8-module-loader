@@ -2,8 +2,6 @@ from __future__ import absolute_import
 
 # Default library imports
 from binascii import unhexlify, hexlify
-import importlib
-import json
 import logging
 import os
 import sys
@@ -14,7 +12,7 @@ from ipv8.attestation.trustchain.community import TrustChainCommunity
 from ipv8.attestation.trustchain.listener import BlockListener
 from ipv8.community import Community
 from ipv8.peer import Peer
-from ipv8_service import IPv8, _COMMUNITIES, _WALKERS
+from ipv8_service import IPv8
 from twisted.application.service import MultiService
 from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
@@ -27,7 +25,7 @@ from loader.community.dapp.core.dapp import DApp
 from loader.community.dapp.core.dapp_identifier import DAppIdentifier
 from loader.community.dapp.dapp_database import DAppDatabase
 from loader.community.dapp.execution.engine import ExecutionEngine
-from loader.community.dapp.transport.bittorrent import BittorrentTransport, DAPPS_DIR, EXECUTE_FILE
+from loader.community.dapp.transport.bittorrent import BittorrentTransport
 
 # Constants
 DAPP_DATABASE_NAME = "dapp"  # dApp database name
@@ -367,12 +365,6 @@ class DAppCommunity(Community, BlockListener):
         self._logger.info("dApp-community: Crawl network peers for unknown dApps")
 
         for peer in self.get_peers():
-            block = self.trustchain.persistence.get_latest(peer.public_key.key_to_bin())
-            if block:
-                latest_block_num = block.sequence_number
-            else:
-                latest_block_num = 0
-
             self.trustchain.crawl_chain(peer)
 
     def _check_votes_in_catalog(self):
@@ -434,10 +426,6 @@ class DAppCommunity(Community, BlockListener):
 
         if len(votes) != 0:
             self._logger.info("dApp-community: inconsistent vote db")
-
-        # Clean up
-        votes = None
-        voters = None
 
         self._logger.info("dApp-community: Checking votes in catalog is done")
 

@@ -17,11 +17,16 @@
     <div id="main" class="container">
         <table class="table table-striped">
             <tr><td style="width: 1px;"></td><td><b>dApp</b></td><td><b>Actions</b></td></tr>
-            <!-- ko foreach: Dapps -->
+            <!-- ko foreach: dapps -->
             <tr>
                 <td>
+                    <span class="label label-success">Done</span>
                 </td>
-                <td><p><b data-bind="text: title"></b></p><p data-bind="text: description"></p></td>
+                <td>
+                    <p><b data-bind="text: name"></b></p>
+                    <p><span data-bind="text: creator"></span>.<span data-bind="text: content_hash"></span></p>
+                    <p data-bind="text: votes"></p>
+                </td>
                 <td>
                     <button data-bind="click: $parent.vote" class="btn">Vote</button>
                     <button data-bind="click: $parent.download" class="btn">Download</button>
@@ -31,10 +36,12 @@
         </table>
     </div>
     <script type="text/javascript">
-        function DappsViewModel() {
+        function DappViewModel() {
             var self = this;
-            self.DappsURI = 'http://localhost:9090/dapp/catalog';
-            self.Dapps = ko.observableArray();
+            self.catalog_uri = 'http://localhost:9090/dapp/catalog';
+            self.download_uri = 'http://localhost:9090/dapp/downloads/';
+            self.vote_uri = 'http://localhost:9090/dapp/votes/';
+            self.dapps = ko.observableArray();
 
             self.ajax = function(uri, method, data) {
                 var request = {
@@ -50,31 +57,30 @@
                     }
                 };
                 return $.ajax(request);
-            }
-            self.vote = function(Dapp, data) {
-                self.ajax(Dapp.uri(), 'PUT', data).done(function(res) {
-                    self.updateDapp(Dapp, res.Dapp);
-                });
-            }
-            self.download = function(Dapp) {
-                self.ajax(Dapp.uri(), 'PUT').done(function() {
-                    self.Dapps.remove(Dapp);
-                });
-            }
-            self.ajax(self.DappsURI, 'GET').done(function(data) {
-            for (var i = 0; i < data.Dapps.length; i++) {
-                self.Dapps.push({
-                    creator: ko.observable(data.Dapps[i].identifier.creator),
-                    content_hash: ko.observable(data.Dapps[i].identifier.content_hash),
-                    name: ko.observable(data.Dapps[i].name),
-                    votes: ko.observable(data.Dapps[i].votes),
-                });
-            }
-        });
+            };
+
+            self.vote = function(dapp) {
+                self.ajax(self.vote_uri + dapp.creator() + "/" + dapp.content_hash(), 'GET').done(function(res) {});
+            };
+
+            self.download = function(dapp) {
+                self.ajax(self.download_uri + dapp.creator + "/" + dapp.content_hash, 'GET').done(function(res) {});
+            };
+
+            self.ajax(self.catalog_uri, 'GET').done(function(data) {
+                for (var i = 0; i < data.dapps.length; i++) {
+                    self.dapps.push({
+                        creator: ko.observable(data.dapps[i].identifier.creator),
+                        content_hash: ko.observable(data.dapps[i].identifier.content_hash),
+                        name: ko.observable(data.dapps[i].name),
+                        votes: ko.observable(data.dapps[i].votes),
+                    });
+                }
+            })
         }
 
-        var DappsViewModel = new DappsViewModel();
-        ko.applyBindings(DappsViewModel, $('#main')[0]);
+        var model = new DappViewModel();
+        ko.applyBindings(model, $('#main')[0]);
     </script>
 </body>
 </html>

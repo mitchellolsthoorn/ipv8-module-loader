@@ -32,7 +32,7 @@ from ipv8_service import IPv8
 
 # Project imports
 from loader import util
-from CLI.CLI import CLI
+from loader.CLI.CLI import CLI
 from loader.community.dapp.community import DAppCommunity
 from loader.REST.root_endpoint import DAppRootEndpoint
 

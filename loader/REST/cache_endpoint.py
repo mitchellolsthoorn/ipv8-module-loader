@@ -16,7 +16,8 @@ class DAppCacheEndpoint(DAppEndpoint):
         return DAppCacheCreatorEndpoint(self.ipv8, path)
 
     def render_GET(self, request):
-        return json.dumps([dapp.to_dict() for dapp in self.get_dapp_overlay().persistence.get_dapps_from_cache()])
+        dapp_identifiers = [dapp.to_dict() for dapp in self.get_dapp_overlay().persistence.get_dapps_from_cache()]
+        return json.dumps({'dapp_identifiers': dapp_identifiers})
 
 
 class DAppCacheCreatorEndpoint(DAppEndpoint):
@@ -42,4 +43,5 @@ class DAppCacheContentHashEndpoint(DAppEndpoint):
             request.setResponseCode(http.NOT_FOUND)
             return json.dumps({"error": "dApp not found in cache"})
 
-        return json.dumps(self.get_dapp_overlay().persistence.get_dapp_from_cache(self._identifier).to_dict())
+        dapp_identifiers = self.get_dapp_overlay().persistence.get_dapp_from_cache(self._identifier).to_dict()
+        return json.dumps({'dapp_identifiers': dapp_identifiers})

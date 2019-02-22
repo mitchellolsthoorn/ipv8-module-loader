@@ -16,7 +16,8 @@ class DAppCatalogEndpoint(DAppEndpoint):
         return DAppCatalogCreatorEndpoint(self.ipv8, path)
 
     def render_GET(self, request):
-        return json.dumps([dapp.to_dict() for dapp in self.get_dapp_overlay().persistence.get_dapps_from_catalog()])
+        dapps = [dapp.to_dict() for dapp in self.get_dapp_overlay().persistence.get_dapps_from_catalog()]
+        return json.dumps({'dapps': dapps})
 
 
 class DAppCatalogCreatorEndpoint(DAppEndpoint):
@@ -42,4 +43,5 @@ class DAppCatalogContentHashEndpoint(DAppEndpoint):
             request.setResponseCode(http.NOT_FOUND)
             return json.dumps({"error": "dApp not found in library"})
 
-        return json.dumps(self.get_dapp_overlay().persistence.get_dapp_from_catalog(self._identifier).to_dict())
+        dapps = self.get_dapp_overlay().persistence.get_dapp_from_catalog(self._identifier).to_dict()
+        return json.dumps({'dapps': dapps})
