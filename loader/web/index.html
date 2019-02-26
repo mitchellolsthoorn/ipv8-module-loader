@@ -64,19 +64,24 @@
             };
 
             self.download = function(dapp) {
-                self.ajax(self.download_uri + dapp.creator + "/" + dapp.content_hash, 'GET').done(function(res) {});
+                self.ajax(self.download_uri + dapp.creator() + "/" + dapp.content_hash(), 'GET').done(function(res) {});
             };
 
-            self.ajax(self.catalog_uri, 'GET').done(function(data) {
-                for (var i = 0; i < data.dapps.length; i++) {
-                    self.dapps.push({
-                        creator: ko.observable(data.dapps[i].identifier.creator),
-                        content_hash: ko.observable(data.dapps[i].identifier.content_hash),
-                        name: ko.observable(data.dapps[i].name),
-                        votes: ko.observable(data.dapps[i].votes),
-                    });
-                }
-            })
+            self.update = function() {
+                self.dapps = ko.observableArray();
+                self.ajax(self.catalog_uri, 'GET').done(function (data) {
+                    for (var i = 0; i < data.dapps.length; i++) {
+                        self.dapps.push({
+                            creator: ko.observable(data.dapps[i].identifier.creator),
+                            content_hash: ko.observable(data.dapps[i].identifier.content_hash),
+                            name: ko.observable(data.dapps[i].name),
+                            votes: ko.observable(data.dapps[i].votes),
+                        });
+                    }
+                })
+            };
+
+            self.update()
         }
 
         var model = new DappViewModel();
