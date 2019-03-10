@@ -173,6 +173,10 @@ class AndroidServiceMaker(object):
         base_dir = os.path.dirname(os.path.dirname(plugin_dir))
         web_path = os.path.join(base_dir, 'loader', 'web')
 
+        msg(plugin_dir)
+        msg(base_dir)
+        msg(web_path)
+
         self.rest_api.root_endpoint.putChild('gui', File(web_path))
 
     def stop(self):

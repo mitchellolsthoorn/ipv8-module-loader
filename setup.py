@@ -13,7 +13,7 @@ setup(
     long_description_content_type='text/markdown',
     version='0.1.0',
     url='https://github.com/mitchellolsthoorn/ipv8-dapps-loader',
-    package_data={'': ['*.*']},
+    package_data={'loader': ['*.*']},
     packages=find_packages(),
     install_requires=[
         "pyipv8",
