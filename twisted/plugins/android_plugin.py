@@ -168,7 +168,7 @@ class AndroidServiceMaker(object):
         self.rest_api = RESTManager(self.ipv8)
         self.rest_api.start(actual_network_port + 1000)
         self.rest_api.root_endpoint.putChild('dapp', DAppRootEndpoint(self.ipv8))
-        self.rest_api.root_endpoint.putChild('gui', File("web"))
+        self.rest_api.root_endpoint.putChild('gui', File("loader/web"))
 
     def stop(self):
         self._stopping = True

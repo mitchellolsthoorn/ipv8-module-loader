@@ -51,7 +51,7 @@ class WebServiceMaker(object):
 
         msg("Service: Starting")
 
-        reactor.listenTCP(10000, server.Site(File("web")))
+        reactor.listenTCP(10000, server.Site(File("loader/web")))
 
         def signal_handler(sig, _):
             msg("Service: Received shut down signal %s" % sig)

@@ -81,7 +81,8 @@
                 })
             };
 
-            self.update()
+            self.update();
+            window.setInterval(self.update, 5000)
         }
 
         var model = new DappViewModel();
