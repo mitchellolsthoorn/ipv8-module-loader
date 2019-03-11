@@ -41,7 +41,7 @@
             self.catalog_uri = 'http://localhost:9090/dapp/catalog';
             self.download_uri = 'http://localhost:9090/dapp/downloads/';
             self.vote_uri = 'http://localhost:9090/dapp/votes/';
-            self.dapps = ko.observableArray();
+            self.dapps = ko.observableArray([]);
 
             self.ajax = function(uri, method, data) {
                 var request = {
@@ -68,24 +68,23 @@
             };
 
             self.update = function() {
-                self.dapps = ko.observableArray();
                 self.ajax(self.catalog_uri, 'GET').done(function (data) {
-                    for (var i = 0; i < data.dapps.length; i++) {
-                        self.dapps.push({
+                    let list = [];
+                    for (let i = 0; i < data.dapps.length; i++) {
+                        list.push({
                             creator: ko.observable(data.dapps[i].identifier.creator),
                             content_hash: ko.observable(data.dapps[i].identifier.content_hash),
                             name: ko.observable(data.dapps[i].name),
                             votes: ko.observable(data.dapps[i].votes),
                         });
                     }
+                    self.dapps(list)
                 })
             };
-
-            self.update();
-            window.setInterval(self.update, 5000)
         }
 
         var model = new DappViewModel();
+        window.setInterval(model.update, 1000);
         ko.applyBindings(model, $('#main')[0]);
     </script>
 </body>
