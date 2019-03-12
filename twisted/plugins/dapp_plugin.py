@@ -34,6 +34,7 @@ from ipv8_service import IPv8
 from loader import util
 from loader.CLI.CLI import CLI
 from loader.community.dapp.community import DAppCommunity
+from loader.event.bus import EventBus
 from loader.REST.root_endpoint import DAppRootEndpoint
 
 
@@ -68,6 +69,7 @@ class DAppServiceMaker(object):
         self.my_peer = None
         self.discovery_community = None
         self.trustchain_community = None
+        self.bus = None
         self.dapp_community = None
         self.cli = None
         self.rest_api = None
@@ -151,10 +153,13 @@ class DAppServiceMaker(object):
         self.ipv8.overlays.append(self.trustchain_community)
         self.ipv8.strategies.append((EdgeWalk(self.trustchain_community), 10))
 
+        # Event bus
+        self.bus = EventBus()
+
         # dApp community
         self.dapp_community = DAppCommunity(self.my_peer, self.ipv8.endpoint, self.ipv8.network,
-                                            trustchain=self.trustchain_community, working_directory=state_directory,
-                                            ipv8=self.ipv8, service=self.service)
+                                            trustchain=self.trustchain_community, bus=self.bus,
+                                            working_directory=state_directory, ipv8=self.ipv8, service=self.service)
         self.ipv8.overlays.append(self.dapp_community)
         self.ipv8.strategies.append((RandomWalk(self.dapp_community), 10))
 

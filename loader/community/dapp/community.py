@@ -26,6 +26,7 @@ from loader.community.dapp.core.dapp_identifier import DAppIdentifier
 from loader.community.dapp.dapp_database import DAppDatabase
 from loader.community.dapp.execution.engine import ExecutionEngine
 from loader.community.dapp.transport.bittorrent import BittorrentTransport
+from loader.event.bus import EventBus
 
 # Constants
 DAPP_DATABASE_NAME = "dapp"  # dApp database name
@@ -53,7 +54,7 @@ class DAppCommunity(Community, BlockListener):
     # Override block class with custom dApp block
     BLOCK_CLASS = DAppBlock
 
-    def __init__(self, my_peer, endpoint, network, trustchain, **kwargs):
+    def __init__(self, my_peer, endpoint, network, trustchain, bus, **kwargs):
         """
         Initialize dApp overlay
 
@@ -71,6 +72,7 @@ class DAppCommunity(Community, BlockListener):
         super(BlockListener, self).__init__()
 
         self.trustchain = trustchain  # type: TrustChainCommunity
+        self.bus = bus  # type: EventBus
         self.working_directory = kwargs.pop('working_directory', "./")  # type: str
         self.ipv8 = kwargs.pop('ipv8')  # type: IPv8
         self.master_service = kwargs.pop('service')  # type: MultiService
