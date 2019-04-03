@@ -1,0 +1,9 @@
+{
+  "name": "trust",
+  "version": "1.0.0",
+  "type": "service",
+  "service_class": "TrustServiceMaker",
+  "service_file": "trust_plugin",
+  "service_options": {
+  }
+}
