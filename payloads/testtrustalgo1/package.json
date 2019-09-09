@@ -1,0 +1,6 @@
+{
+  "name": "testtrustalgo1",
+  "version": "1.0.0",
+  "type": "executable",
+  "executable_file": "netflow"
+}

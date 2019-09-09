@@ -14,7 +14,7 @@ from loader.community.dapp.core.dapp import DApp
 
 # Project imports
 
-DAPPS_DIR = "cache"
+DAPPS_DIR = "package"
 EXECUTE_FILE = "execute.py"
 PAYLOADS_DIR = "package"
 TORRENTS_DIR = "torrents"

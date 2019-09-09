@@ -31,7 +31,7 @@ from loader.event.bus import EventBus
 # Constants
 DAPP_DATABASE_NAME = "dapp"  # dApp database name
 DAPP_CACHE_DIR = "cache"  # dApp cache directory
-DAPP_LIBRARY_DIR = "library"  # dApp library directory
+DAPP_LIBRARY_DIR = "package"  # dApp library directory
 DAPP_PACKAGE_DIR = "package"  # dApp package directory
 DAPP_TORRENT_DIR = "torrents"  # dApp torrent directory
 
@@ -138,6 +138,8 @@ class DAppCommunity(Community, BlockListener):
         :return: None
         """
         dapp_package_directory = os.path.join(self.working_directory, DAPP_PACKAGE_DIR, name)
+
+        print dapp_package_directory
 
         if not os.path.isdir(dapp_package_directory):
             self._logger.info("dApp-community: dApp package (%s) does not exists", name)
