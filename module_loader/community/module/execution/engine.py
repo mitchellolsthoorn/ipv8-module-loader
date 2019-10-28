@@ -6,12 +6,12 @@ import os
 from ipv8_service import _COMMUNITIES, _WALKERS
 from twisted.internet import reactor
 
-from loader.community.dapp.transport.bittorrent import DAPPS_DIR, EXECUTE_FILE
+from module_loader.community.module.transport.bittorrent import MODULES_DIR, EXECUTE_FILE
 
 
 class ExecutionEngine(object):
     """
-    Execution engine for dApps
+    Execution engine for modules
     """
 
     def __init__(self, working_directory, community):
@@ -24,35 +24,35 @@ class ExecutionEngine(object):
         self._logger = logging.getLogger(self.__class__.__name__)
 
         # State
-        self.imported_dapps = []
+        self.imported_modules = []
 
-    def run_dapp(self, dapp):
-        name = dapp.name
-        dapps_directory = os.path.join(os.path.abspath(self.working_directory), DAPPS_DIR)
-        dapp_path = os.path.join(dapps_directory, name)
-        dapp_executable = os.path.join(dapp_path, EXECUTE_FILE)
+    def run_module(self, module):
+        name = module.name
+        modules_directory = os.path.join(os.path.abspath(self.working_directory), MODULES_DIR)
+        module_path = os.path.join(modules_directory, name)
+        module_executable = os.path.join(module_path, EXECUTE_FILE)
 
-        if os.path.isdir(dapp_path) and os.path.isfile(os.path.join(dapp_path, 'package.json')):
-            self._logger.info("dApp-community: dApp (%s) found", name)
+        if os.path.isdir(module_path) and os.path.isfile(os.path.join(module_path, 'module.json')):
+            self._logger.info("module-community: module (%s) found", name)
 
-            with open(os.path.join(dapp_path, 'package.json')) as f:
+            with open(os.path.join(module_path, 'module.json')) as f:
                 data = json.load(f)
 
                 package_type = data['type']
                 if package_type == "executable":
-                    self._logger.info("dApp-community: executable dApp (%s) found", name)
+                    self._logger.info("module-community: executable module (%s) found", name)
                     executable_file = data['executable_file']
 
-                    if dapp.id not in self.imported_dapps:
+                    if module.id not in self.imported_modules:
                         importlib.import_module(name + "." + executable_file)
-                        self.imported_dapps.append(dapp.id)
+                        self.imported_modules.append(module.id)
 
                 elif package_type == "overlay":
-                    self._logger.info("dApp-community: dApp overlay (%s) found", name)
+                    self._logger.info("module-community: module overlay (%s) found", name)
 
                     overlay_file = data['overlay_file']
 
-                    if dapp.id not in self.imported_dapps:
+                    if module.id not in self.imported_modules:
                         configuration = getattr(importlib.import_module(name + "." + overlay_file), "config")
                         extra_communities = getattr(importlib.import_module(name + "." + overlay_file),
                                                     "extra_communities")
@@ -74,20 +74,20 @@ class ExecutionEngine(object):
                                     (strategy_class(overlay_instance, **args), target_peers))
                             for config in overlay['on_start']:
                                 reactor.callWhenRunning(getattr(overlay_instance, config[0]), *config[1:])
-                            self._logger.info("dApp-community: dApp overlay (%s) added", overlay['class'])
+                            self._logger.info("module-community: module overlay (%s) added", overlay['class'])
 
-                        self.imported_dapps.append(dapp.id)
+                        self.imported_modules.append(module.id)
 
                 elif package_type == "service":
-                    self._logger.info("dApp-community: dApp service (%s) found", name)
+                    self._logger.info("module-community: module service (%s) found", name)
                     service_file = data['service_file']
                     service_class = data['service_class']
                     service_options = data['service_options']
 
-                    if dapp.id not in self.imported_dapps:
+                    if module.id not in self.imported_modules:
                         cls = getattr(importlib.import_module(name + "." + service_file), service_class)
                         service = cls().makeService(service_options)
                         self.community.master_service.addService(service)
-                        self._logger.info("dApp-community: dApp service (%s) added", service.name)
+                        self._logger.info("module-community: module service (%s) added", service.name)
 
-                        self.imported_dapps.append(dapp.id)
+                        self.imported_modules.append(module.id)

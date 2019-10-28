@@ -1,1 +1,1 @@
-print "Hello World!\nFirst prototype dapp was executed"
+print "Hello World!\nFirst prototype module was executed"

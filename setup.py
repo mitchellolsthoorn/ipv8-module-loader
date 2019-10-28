@@ -6,32 +6,19 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name='loader',
+    name='module_loader',
     author='Mitchell Olsthoorn',
-    description='IPv8 dApp loader',
+    description='IPv8 module loader',
     long_description=long_description,
     long_description_content_type='text/markdown',
     version='0.1.0',
-    url='https://github.com/mitchellolsthoorn/ipv8-dapps-loader',
-    package_data={'loader': ['*.*']},
+    url='https://github.com/mitchellolsthoorn/ipv8-module-loader',
+    package_data={'module_loader': ['*.*']},
     packages=find_packages(),
     install_requires=[
         "pyipv8",
-    ],
-    classifiers=[
-        "Development Status :: 5 - Production/Stable",
-        "Framework :: Twisted",
-        "Intended Audience :: Developers",
-        "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
-        "Natural Language :: English",
-        "Operating System :: OS Independent",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.5",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Topic :: Scientific/Engineering",
-        "Topic :: Software Development :: Libraries :: Python Modules",
-        "Topic :: System :: Distributed Computing",
-        "Topic :: System :: Networking"
+        "service_identity",
+        "yappi",
+        "six"
     ]
 )

@@ -1,10 +1,10 @@
 from binascii import hexlify
 
 
-class DAppIdentifier(object):
+class ModuleIdentifier(object):
 
     def __init__(self, creator, content_hash):
-        super(DAppIdentifier, self).__init__()
+        super(ModuleIdentifier, self).__init__()
 
         self._creator = creator
         self._content_hash = content_hash
@@ -27,7 +27,7 @@ class DAppIdentifier(object):
         return "{0}.{1}".format(hexlify(self._creator), self._content_hash)
 
     def __eq__(self, other):
-        if not isinstance(other, DAppIdentifier):
+        if not isinstance(other, ModuleIdentifier):
             return False
 
         return self._creator == other._creator and self._content_hash == other._content_hash

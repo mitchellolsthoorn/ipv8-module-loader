@@ -10,11 +10,11 @@ import time
 import libtorrent as lt
 
 # Constants
-from loader.community.dapp.core.dapp import DApp
+from module_loader.community.module.core.module import Module
 
 # Project imports
 
-DAPPS_DIR = "package"
+MODULES_DIR = "package"
 EXECUTE_FILE = "execute.py"
 PAYLOADS_DIR = "package"
 TORRENTS_DIR = "torrents"
@@ -23,7 +23,7 @@ LTSTATE_FILENAME = "lt.state"
 
 class BittorrentTransport(object):
     """
-    BitTorrent transport for moving dApps between nodes
+    BitTorrent transport for moving modules between nodes
     """
 
     def __init__(self, working_directory, dht_enable=True, lsd_enable=True, tracker_enable=True):
@@ -52,18 +52,18 @@ class BittorrentTransport(object):
             # Enable LSD
             self.ses.start_lsd()
 
-    def download_dapp(self, dapp):
+    def download_module(self, module):
         """
-        Download dApp
+        Download module
 
-        :param dapp: dApp
-        :type dapp: DApp
+        :param module: module
+        :type module: Module
         :return: None
         """
-        dapps_directory = os.path.join(self.working_directory, DAPPS_DIR)
+        modules_directory = os.path.join(self.working_directory, MODULES_DIR)
 
-        params = {'save_path': dapps_directory}
-        torrent = "magnet:?xt=urn:btih:{0}&dn={1}".format(dapp.id.content_hash, dapp.name)
+        params = {'save_path': modules_directory}
+        torrent = "magnet:?xt=urn:btih:{0}&dn={1}".format(module.id.content_hash, module.name)
         h = lt.add_magnet_uri(self.ses, torrent, params)
 
         self._logger.debug("transport: checking torrent (%s)", h.name())
@@ -71,24 +71,24 @@ class BittorrentTransport(object):
         while not h.has_metadata():
             time.sleep(.1)
 
-        self._logger.debug("transport: metadata complete for torrent (%s)", dapp.id.content_hash)
+        self._logger.debug("transport: metadata complete for torrent (%s)", module.id.content_hash)
 
         torrent_info = h.get_torrent_info()
-        h = self.ses.add_torrent({'ti': torrent_info, 'save_path': dapps_directory, 'seed_mode': True})
+        h = self.ses.add_torrent({'ti': torrent_info, 'save_path': modules_directory, 'seed_mode': True})
 
-        # shutil.copytree(os.path.join(dapps_directory, dapp.name), os.path.join(self.working_directory, "library", dapp.name))
+        # shutil.copytree(os.path.join(modules_directory, module.name), os.path.join(self.working_directory, "library", module.name))
 
-    def create_dapp_package(self, dapp):
+    def create_module_package(self, module):
         payloads_directory = os.path.join(self.working_directory, PAYLOADS_DIR)
         torrents_directory = os.path.join(self.working_directory, TORRENTS_DIR)
 
         tracker_list = ['udp://tracker.publicbt.com:80/announce', 'udp://tracker.openbittorrent.com:80/announce']
 
-        self._logger.debug("transport: creating torrent (%s)", dapp)
+        self._logger.debug("transport: creating torrent (%s)", module)
 
         # Create torrent
         fs = lt.file_storage()
-        lt.add_files(fs, os.path.join(payloads_directory, dapp))
+        lt.add_files(fs, os.path.join(payloads_directory, module))
         t = lt.create_torrent(fs)
 
         if self.tracker_enable:
@@ -99,7 +99,7 @@ class BittorrentTransport(object):
         torrent = t.generate()
 
         # Create torrent file
-        torrent_file_path = os.path.join(torrents_directory, dapp + ".torrent")
+        torrent_file_path = os.path.join(torrents_directory, module + ".torrent")
         f = open(torrent_file_path, "wb")
         f.write(lt.bencode(torrent))
         f.close()
@@ -107,12 +107,12 @@ class BittorrentTransport(object):
         # Create magnet link
         torrent_info = lt.torrent_info(torrent_file_path)
         magnet_link = "magnet:?xt=urn:btih:%s&dn=%s" % (torrent_info.info_hash(), torrent_info.name())
-        magnet_file = os.path.join(torrents_directory, dapp + ".magnet")
+        magnet_file = os.path.join(torrents_directory, module + ".magnet")
         f = open(magnet_file, "wb")
         f.write(magnet_link)
         f.close()
 
-        self._logger.debug("transport: seeding torrent (%s)", dapp)
+        self._logger.debug("transport: seeding torrent (%s)", module)
 
         # Seed torrent
         h = self.ses.add_torrent({'ti': torrent_info, 'save_path': payloads_directory, 'seed_mode': True})

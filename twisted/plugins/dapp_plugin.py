@@ -31,11 +31,11 @@ from ipv8.REST.rest_manager import RESTManager
 from ipv8_service import IPv8
 
 # Project imports
-from loader import util
-from loader.CLI.CLI import CLI
-from loader.community.dapp.community import DAppCommunity
-from loader.event.bus import EventBus
-from loader.REST.root_endpoint import DAppRootEndpoint
+from module_loader import util
+from module_loader.CLI.CLI import CLI
+from module_loader.community.module.community import ModuleCommunity
+from module_loader.event.bus import EventBus
+from module_loader.REST.root_endpoint import ModuleRootEndpoint
 
 
 class Options(usage.Options):
@@ -49,10 +49,10 @@ class Options(usage.Options):
     ]
 
 
-class DAppServiceMaker(object):
+class ModuleServiceMaker(object):
     implements(IServiceMaker, IPlugin)
-    tapname = "dapp"
-    description = "dSpp service"
+    tapname = "module-loader"
+    description = "module loader service"
     options = Options
 
     def __init__(self):
@@ -70,7 +70,7 @@ class DAppServiceMaker(object):
         self.discovery_community = None
         self.trustchain_community = None
         self.bus = None
-        self.dapp_community = None
+        self.module_community = None
         self.cli = None
         self.rest_api = None
 
@@ -156,15 +156,15 @@ class DAppServiceMaker(object):
         # Event bus
         self.bus = EventBus()
 
-        # dApp community
-        self.dapp_community = DAppCommunity(self.my_peer, self.ipv8.endpoint, self.ipv8.network,
+        # module community
+        self.module_community = ModuleCommunity(self.my_peer, self.ipv8.endpoint, self.ipv8.network,
                                             trustchain=self.trustchain_community, bus=self.bus,
                                             working_directory=state_directory, ipv8=self.ipv8, service=self.service)
-        self.ipv8.overlays.append(self.dapp_community)
-        self.ipv8.strategies.append((RandomWalk(self.dapp_community), 10))
+        self.ipv8.overlays.append(self.module_community)
+        self.ipv8.strategies.append((RandomWalk(self.module_community), 10))
 
         # CLI
-        self.cli = CLI(self, self.ipv8, self.dapp_community)
+        self.cli = CLI(self, self.ipv8, self.module_community)
 
         def signal_handler(sig, _):
             msg("Service: Received shut down signal %s" % sig)
@@ -176,7 +176,7 @@ class DAppServiceMaker(object):
 
         self.rest_api = RESTManager(self.ipv8)
         self.rest_api.start(actual_network_port + 1000)
-        self.rest_api.root_endpoint.putChild('dapp', DAppRootEndpoint(self.ipv8))
+        self.rest_api.root_endpoint.putChild('module', ModuleRootEndpoint(self.ipv8))
 
         StandardIO(self.cli)
 
@@ -190,12 +190,12 @@ class DAppServiceMaker(object):
         Construct a IPv8 service.
         """
 
-        dapp_service = MultiService()
-        dapp_service.setName("dapp")
+        module_service = MultiService()
+        module_service.setName("module-loader")
 
-        reactor.callWhenRunning(self.start, options, dapp_service)
+        reactor.callWhenRunning(self.start, options, module_service)
 
-        return dapp_service
+        return module_service
 
 
-service_maker = DAppServiceMaker()
+service_maker = ModuleServiceMaker()

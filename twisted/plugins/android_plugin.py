@@ -31,10 +31,10 @@ from ipv8.REST.rest_manager import RESTManager
 from ipv8_service import IPv8
 
 # Project imports
-from loader import util
-from loader.community.dapp.community import DAppCommunity
-from loader.event.bus import EventBus
-from loader.REST.root_endpoint import DAppRootEndpoint
+from module_loader import util
+from module_loader.community.module.community import ModuleCommunity
+from module_loader.event.bus import EventBus
+from module_loader.REST.root_endpoint import ModuleRootEndpoint
 
 
 class Options(usage.Options):
@@ -50,8 +50,8 @@ class Options(usage.Options):
 
 class AndroidServiceMaker(object):
     implements(IServiceMaker, IPlugin)
-    tapname = "dapp-android"
-    description = "dSpp service"
+    tapname = "module-loader-android"
+    description = "module service for Android"
     options = Options
 
     def __init__(self):
@@ -69,7 +69,7 @@ class AndroidServiceMaker(object):
         self.discovery_community = None
         self.trustchain_community = None
         self.bus = None
-        self.dapp_community = None
+        self.module_community = None
         self.cli = None
         self.rest_api = None
 
@@ -155,12 +155,12 @@ class AndroidServiceMaker(object):
         # Event bus
         self.bus = EventBus()
 
-        # dApp community
-        self.dapp_community = DAppCommunity(self.my_peer, self.ipv8.endpoint, self.ipv8.network,
+        # module community
+        self.module_community = ModuleCommunity(self.my_peer, self.ipv8.endpoint, self.ipv8.network,
                                             trustchain=self.trustchain_community, bus=self.bus,
                                             working_directory=state_directory, ipv8=self.ipv8, service=self.service)
-        self.ipv8.overlays.append(self.dapp_community)
-        self.ipv8.strategies.append((RandomWalk(self.dapp_community), 10))
+        self.ipv8.overlays.append(self.module_community)
+        self.ipv8.strategies.append((RandomWalk(self.module_community), 10))
 
         def signal_handler(sig, _):
             msg("Service: Received shut down signal %s" % sig)
@@ -172,11 +172,11 @@ class AndroidServiceMaker(object):
 
         self.rest_api = RESTManager(self.ipv8)
         self.rest_api.start(actual_network_port + 1000)
-        self.rest_api.root_endpoint.putChild('dapp', DAppRootEndpoint(self.ipv8))
+        self.rest_api.root_endpoint.putChild('module', ModuleRootEndpoint(self.ipv8))
 
         plugin_dir = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
         base_dir = os.path.dirname(os.path.dirname(plugin_dir))
-        web_path = os.path.join(base_dir, 'loader', 'web')
+        web_path = os.path.join(base_dir, 'module_loader', 'web')
 
         msg(plugin_dir)
         msg(base_dir)
@@ -194,12 +194,12 @@ class AndroidServiceMaker(object):
         Construct a IPv8 service.
         """
 
-        dapp_service = MultiService()
-        dapp_service.setName("dapp")
+        module_service = MultiService()
+        module_service.setName("module")
 
-        reactor.callWhenRunning(self.start, options, dapp_service)
+        reactor.callWhenRunning(self.start, options, module_service)
 
-        return dapp_service
+        return module_service
 
 
 service_maker = AndroidServiceMaker()

@@ -20,8 +20,8 @@ class Options(usage.Options):
 
 class WebServiceMaker(object):
     implements(IServiceMaker, IPlugin)
-    tapname = "dapp-web"
-    description = "dApp web application"
+    tapname = "module-loader-web"
+    description = "module loader web application"
     options = Options
 
     def __init__(self):
@@ -51,7 +51,7 @@ class WebServiceMaker(object):
 
         msg("Service: Starting")
 
-        reactor.listenTCP(10000, server.Site(File("loader/web")))
+        reactor.listenTCP(10000, server.Site(File("module_loader/web")))
 
         def signal_handler(sig, _):
             msg("Service: Received shut down signal %s" % sig)
@@ -71,7 +71,7 @@ class WebServiceMaker(object):
         """
 
         web_service = MultiService()
-        web_service.setName("dapp-web")
+        web_service.setName("module-loader-web")
 
         reactor.callWhenRunning(self.start, options, web_service)
 
